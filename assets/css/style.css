@@ -87,6 +87,7 @@
 .toast.error{border-color:#6b2323;background:#201214}
 .published-list{display:flex;flex-direction:column;gap:8px;max-height:240px;overflow:auto;margin-top:10px}
 .published-item{display:flex;gap:10px;align-items:center;padding:8px;border-radius:8px;background:#0c1014;border:1px solid var(--border);cursor:pointer}
+.published-item button{margin-left:auto}
 .published-item .pub-thumb{width:56px;height:36px;object-fit:cover;border-radius:6px}
 .published-item .pub-meta{display:flex;flex-direction:column}
 .pub-title{font-weight:700}

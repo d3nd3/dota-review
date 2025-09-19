@@ -560,12 +560,67 @@ showWelcomeBtn?.addEventListener("click", async () => {
       const sub = document.createElement('div'); sub.className = 'pub-sub'; sub.textContent = `${p.hero || ''} • ${p.ts ? new Date(p.ts).toLocaleString() : ''}`;
       meta.appendChild(title); meta.appendChild(sub);
       item.appendChild(img); item.appendChild(meta);
+      // load on click
       item.addEventListener('click', () => { try{ localStorage.setItem('dota-review:welcomed','1'); }catch{}; welcomeDialog?.close(); loadMatch(p.matchId); });
+      // show delete control when verified
+      if(state.verified){
+        const delBtn = document.createElement('button'); delBtn.className = 'btn small subtle'; delBtn.textContent = 'Delete';
+        delBtn.style.marginLeft = '12px';
+        delBtn.addEventListener('click', (ev) => { ev.stopPropagation(); deletePublishedMatch(p.matchId); });
+        item.appendChild(delBtn);
+      }
       node.appendChild(item);
     }
     welcomeDialog.showModal();
   }catch{}
 });
+
+// Helper to get file SHA for a path
+async function getFileSha(owner, repo, path, branch, token){
+  const api = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${encodeURIComponent(branch)}`;
+  const res = await fetch(api, { headers: { Authorization: `token ${token}` } });
+  if(!res.ok) return null;
+  const j = await res.json();
+  return j.sha;
+}
+
+// Delete a published match file and remove it from data/index.json
+async function deletePublishedMatch(matchId){
+  if(!confirm(`Delete published match ${matchId}? This cannot be undone via the app.`)) return;
+  const owner = ghOwner.value.trim();
+  const repo = ghRepo.value.trim();
+  const branch = ghBranch.value.trim() || 'gh-pages';
+  const token = ghToken.value.trim();
+  if(!owner || !repo || !token){ showToast('Enter owner/repo/token to delete.', 'error'); return; }
+  try{
+    // delete data/<matchId>.json
+    const path = `data/${encodeURIComponent(matchId)}.json`;
+    const sha = await getFileSha(owner, repo, path, branch, token);
+    if(!sha){ showToast('Could not find published file to delete.', 'error'); return; }
+    const api = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+    const delRes = await fetch(api, { method: 'DELETE', headers: { Authorization: `token ${token}`, 'Content-Type':'application/json' }, body: JSON.stringify({ message: `Delete review ${matchId}`, sha, branch }) });
+    if(!delRes.ok){ const t = await delRes.text(); showToast('Failed to delete match file.', 'error'); console.error(t); return; }
+
+    // update index.json if present
+    const idxPath = 'data/index.json';
+    const idxSha = await getFileSha(owner, repo, idxPath, branch, token);
+    if(idxSha){
+      const idxRes = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${idxPath}`);
+      if(idxRes.ok){
+        const idxJson = await idxRes.json();
+        idxJson.published = (idxJson.published || []).filter(p => p.matchId !== matchId);
+        const content = btoa(unescape(encodeURIComponent(JSON.stringify(idxJson, null, 2))));
+        const putRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${idxPath}`, { method: 'PUT', headers: { Authorization: `token ${token}`, 'Content-Type':'application/json' }, body: JSON.stringify({ message: `Update index after deleting ${matchId}`, content, sha: idxSha, branch }) });
+        if(!putRes.ok){ const t=await putRes.text(); console.error('Failed to update index.json', t); }
+      }
+    }
+
+    showToast(`Deleted ${matchId}`);
+    // refresh published list
+    try{ const node = document.getElementById('publishedList'); node.innerHTML=''; }catch{}
+    showWelcomeBtn?.click();
+  }catch(err){ console.error(err); showToast('Error deleting match.', 'error'); }
+}
 
 // If encrypted creds are present and user clicks Verify, allow them to enter passphrase to unlock
 verifyBtn?.addEventListener('click', async () => {
