@@ -61,6 +61,9 @@
 .notes-list{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px;max-height:60vh;overflow:auto}
 .notes-list li{background:#0b0f13;border:1px solid var(--border);border-radius:10px;padding:10px 12px;display:flex;align-items:flex-start;gap:10px}
 .notes-list li .bullet{color:var(--brand-2)}
+.notes-list li .bullet.positive{color:var(--ok)}
+.notes-list li .bullet.negative{color:#c94b4b}
+.notes-list li .bullet.neutral{color:var(--brand-2)}
 .notes-list li .text{flex:1}
 .notes-list li .del{background:transparent;border:1px solid #2a323a;color:#cdd6df;border-radius:8px;height:28px;padding:0 8px;cursor:pointer}
 .note-input-row{display:flex;gap:8px;margin-top:10px}

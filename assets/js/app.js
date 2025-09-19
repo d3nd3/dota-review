@@ -233,13 +233,16 @@ function renderSlide(){
       t.contentEditable = true;
       t.spellcheck = false;
       t.textContent = noteText;
-      sentiment.textContent = noteSentiment === 'positive' ? '🟢' : (noteSentiment === 'negative' ? '🔴' : (noteSentiment === 'neutral' ? '🟡' : ''));
+      sentiment.textContent = noteSentiment === 'positive' ? '👍' : (noteSentiment === 'negative' ? '👎' : (noteSentiment === 'neutral' ? '🟡' : ''));
+      // reflect sentiment on bullet for clearer visibility
+      b.className = 'bullet ' + (noteSentiment || '');
       sentiment.title = noteSentiment || '';
       sentiment.addEventListener('click', () => {
         // cycle sentiment: '' -> positive -> neutral -> negative -> ''
         const next = noteSentiment === '' ? 'positive' : (noteSentiment === 'positive' ? 'neutral' : (noteSentiment === 'neutral' ? 'negative' : ''));
         noteSentiment = next;
-        sentiment.textContent = noteSentiment === 'positive' ? '🟢' : (noteSentiment === 'negative' ? '🔴' : (noteSentiment === 'neutral' ? '🟡' : ''));
+      sentiment.textContent = noteSentiment === 'positive' ? '👍' : (noteSentiment === 'negative' ? '👎' : (noteSentiment === 'neutral' ? '🟡' : ''));
+      b.className = 'bullet ' + (noteSentiment || '');
         sentiment.title = noteSentiment || '';
         // persist back
         cur.notes[i] = noteSentiment ? { text: String(t.textContent || '').trim(), sentiment: noteSentiment } : String(t.textContent || '').trim();
@@ -258,7 +261,7 @@ function renderSlide(){
     } else {
       // show sentiment when not editing
       if(typeof note === 'string'){ t.textContent = note; }
-      else { t.textContent = note.text || ''; sentiment.textContent = note.sentiment === 'positive' ? '🟢' : (note.sentiment === 'negative' ? '🔴' : (note.sentiment === 'neutral' ? '🟡' : '')); }
+      else { t.textContent = note.text || ''; sentiment.textContent = note.sentiment === 'positive' ? '👍' : (note.sentiment === 'negative' ? '👎' : (note.sentiment === 'neutral' ? '🟡' : '')); b.className = 'bullet ' + (note.sentiment || ''); }
     }
     const del = document.createElement("button"); del.className = "del"; del.textContent = "×";
     del.addEventListener("click", () => { removeNoteAt(i); });
