@@ -600,10 +600,9 @@ const url = new URL(location.href);
 const q = url.searchParams.get("match") || (location.hash.startsWith("#") ? location.hash.slice(1) : "");
 if(q){ loadMatch(q); }
 else {
-  // Show welcome on first visit
+  // Show welcome dialog when no match is provided in the URL
   try{
-    const seen = localStorage.getItem("dota-review:welcomed");
-    if(!seen && welcomeDialog){ await populatePublishedList(); welcomeDialog.showModal(); }
+    if(welcomeDialog){ await populatePublishedList(); welcomeDialog.showModal(); }
   }catch{}
 }
 
