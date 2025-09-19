@@ -389,32 +389,19 @@ function addNote(){
 // Sync selected note's sentiment into the input radio controls
 function syncNoteSentimentToControls(index){
   try{
-    console.log('syncNoteSentimentToControls called with index:', index);
     const slide = currentSlide();
-    if(!slide || index === null || index === undefined) {
-      console.log('No slide or invalid index, returning');
-      return;
-    }
+    if(!slide || index === null || index === undefined) return;
     const note = slide.notes[index];
     let s = '';
     if(typeof note === 'string') s = '';
     else if(note && typeof note === 'object') s = note.sentiment || '';
-    console.log('Note sentiment:', s, 'for note:', note);
     const sel = document.querySelectorAll('input[name="noteSentiment"]');
-    console.log('Setting radio buttons, found', sel.length, 'radios');
-    sel.forEach(r => {
-      const wasChecked = r.checked;
-      r.checked = (r.value === s);
-      if(wasChecked !== r.checked) {
-        console.log('Changed radio', r.value, 'to', r.checked);
-      }
-    });
+    sel.forEach(r => { r.checked = (r.value === s); });
     // Clear any previous selected note when syncing
     if(state.selectedNoteIndex !== index){
-      console.log('Updating selectedNoteIndex from', state.selectedNoteIndex, 'to', index);
       state.selectedNoteIndex = index;
     }
-  }catch(e){console.error('Error in syncNoteSentimentToControls:', e);}
+  }catch{}
 }
 
 // Wire a single change handler for the note sentiment radios that updates the selected note in-place
@@ -422,21 +409,15 @@ function wireNoteSentimentControls(){
   try{
     // Attach change listeners directly to each radio button
     const radios = document.querySelectorAll('input[name="noteSentiment"]');
-    console.log('Wiring', radios.length, 'sentiment radio buttons');
     radios.forEach(radio => {
       radio.addEventListener('change', (ev) => {
-        console.log('Radio changed:', ev.target.value, 'selectedNoteIndex:', state.selectedNoteIndex);
-        if(state.selectedNoteIndex === null || state.selectedNoteIndex === undefined) {
-          console.log('No note selected, ignoring radio change');
-          return;
-        }
+        if(state.selectedNoteIndex === null || state.selectedNoteIndex === undefined) return;
         const val = ev.target.value;
         const slide = currentSlide();
         if(!slide) return;
         const idx = state.selectedNoteIndex;
         const note = slide.notes[idx];
         const text = (typeof note === 'string') ? note : (note && note.text) || '';
-        console.log('Updating note', idx, 'with sentiment:', val);
         // update data
         slide.notes[idx] = val ? { text: text, sentiment: val } : text;
         saveLocal();
@@ -457,7 +438,7 @@ function wireNoteSentimentControls(){
         }catch(e){}
       });
     });
-  }catch(e){console.error('Error wiring sentiment controls:', e);}
+  }catch{}
 }
 
 function removeNoteAt(index){
@@ -740,7 +721,6 @@ document.addEventListener('click', (ev) => {
   // If clicked outside of notes list and sentiment controls, clear selection
   const sentimentControls = document.querySelector('.sentiment-controls');
   if(!notesList.contains(target) && (!sentimentControls || !sentimentControls.contains(target))){
-    console.log('Clearing note selection');
     state.selectedNoteIndex = null;
     // Reset radio controls to unchecked
     try{
