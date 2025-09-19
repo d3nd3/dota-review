@@ -242,11 +242,12 @@ function renderSlide(){
       b.className = 'bullet ' + (noteSentiment || '');
       sentiment.title = noteSentiment || '';
       sentiment.addEventListener('click', () => {
+        if(!state.edit) return; // only interactive in edit mode
         // cycle sentiment: '' -> positive -> neutral -> negative -> ''
         const next = noteSentiment === '' ? 'positive' : (noteSentiment === 'positive' ? 'neutral' : (noteSentiment === 'neutral' ? 'negative' : ''));
         noteSentiment = next;
-      sentiment.textContent = noteSentiment === 'positive' ? '👍' : (noteSentiment === 'negative' ? '👎' : (noteSentiment === 'neutral' ? '🟡' : ''));
-      b.className = 'bullet ' + (noteSentiment || '');
+        sentiment.textContent = noteSentiment === 'positive' ? '👍' : (noteSentiment === 'negative' ? '👎' : (noteSentiment === 'neutral' ? '🟡' : ''));
+        b.className = 'bullet ' + (noteSentiment || '');
         sentiment.title = noteSentiment || '';
         // persist back
         cur.notes[i] = noteSentiment ? { text: String(t.textContent || '').trim(), sentiment: noteSentiment } : String(t.textContent || '').trim();

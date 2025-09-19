@@ -72,8 +72,13 @@
 .sentiment-controls{display:flex;align-items:center;gap:6px;margin-right:6px}
 .sent-btn{display:inline-flex;align-items:center;justify-content:center;border-radius:8px;padding:6px;background:transparent;border:1px solid var(--border);cursor:pointer}
 .sent-btn input{display:none}
-.sent-btn span{font-size:16px}
-.sent-btn input:checked + span{outline:2px solid rgba(255,255,255,.06);border-radius:6px}
+.sent-btn span{font-size:16px;display:inline-flex;align-items:center;justify-content:center;padding:4px;border-radius:6px}
+/* make checked state clearly visible */
+.sent-btn input:checked + span{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.06);box-shadow:0 0 0 3px rgba(0,0,0,0.35) inset}
+.sent-btn:hover span{background:rgba(255,255,255,0.02)}
+
+/* sentiment emoji in notes list */
+.sentiment{cursor:pointer;user-select:none;margin-left:6px;font-size:16px;align-self:center}
 
 .empty-state{display:flex;align-items:center;justify-content:center;min-height:360px}
 .empty-card{background:#0e1216;border:1px dashed #2a323a;border-radius:14px;padding:20px 24px;text-align:center;color:var(--muted)}
