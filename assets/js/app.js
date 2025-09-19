@@ -58,9 +58,29 @@ function loadSavedCredentials(){
       if(ecred.owner) ghOwner.value = ecred.owner;
       if(ecred.repo) ghRepo.value = ecred.repo;
       if(ecred.branch) ghBranch.value = ecred.branch;
-      // do not populate ghToken; require explicit verify to decrypt
+      // store encrypted blob and attempt to prompt for passphrase to auto-fill token
       window._dota_review_saved_encrypted = ecred; // temp global for verify flow
-      showToast('Encrypted credentials found. Click Verify to unlock.');
+      try{
+        // Prompt user to unlock saved credentials so the publish form can be auto-filled
+        const pass = prompt('Enter passphrase to decrypt saved GitHub token (Cancel to skip)');
+        if(pass){
+          decryptToken(pass, ecred.encrypted).then((token) => {
+            ghToken.value = token;
+            // Persist plain creds for smoother UX (match existing verify flow behavior)
+            try{ localStorage.setItem('dota-review:gh', JSON.stringify({ owner: ecred.owner, repo: ecred.repo, branch: ecred.branch, token })); }catch{}
+            // attempt silent verification
+            verifyAccess({ silent: true });
+            showToast('Unlocked saved credentials.');
+          }).catch(() => {
+            showToast('Failed to decrypt saved credentials. Click Verify to unlock.', 'error');
+          });
+        } else {
+          showToast('Encrypted credentials stored. Click Verify to unlock.', 'info');
+        }
+      }catch(err){
+        // ignore prompt/crypto failures
+        showToast('Encrypted credentials present. Click Verify to unlock.');
+      }
       return;
     }
     const raw = localStorage.getItem('dota-review:gh');
