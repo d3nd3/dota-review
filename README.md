@@ -11,6 +11,33 @@ Static web app to review Dota matches by match ID. Paste screenshots directly, a
 - Add notes per slide; navigate with ← → or on-screen arrows
 - Export JSON or publish to `data/<matchId>.json`
 
+## Technology stack
+
+- **Hosting**: GitHub Pages (static site). The repo is served as plain files; no server runtime is required.
+- **Frontend**: Vanilla HTML5, CSS3 and modern JavaScript (ES modules). No framework (React/Vue) or build step is required — just open `index.html` or enable GitHub Pages.
+- **Styling**: Custom CSS with Google Fonts (`Cinzel` for titles, `Inter` for UI). Responsive layout and CSS variables for theme.
+- **Data storage**:
+  - Local drafts and settings: `localStorage` (keys: `dota-review:<matchId>` and `dota-review:gh` / `dota-review:gh_enc`).
+  - Published reviews: simple JSON files placed under the `data/` directory (e.g. `data/<matchId>.json`). An index of published matches (optional) is `data/index.json`.
+- **Networking & APIs**:
+  - Uses the browser `fetch` API to load `data/*.json` and to call the GitHub REST API (`PUT /repos/{owner}/{repo}/contents/...`) for publishing reviews.
+  - Token verification reads repository metadata and branch metadata via GitHub API to confirm push permission.
+- **Encryption**: Optional client-side encryption of stored GitHub tokens using the Web Crypto API (PBKDF2 -> AES-GCM). Passphrase-based encryption is performed in-browser; the server/remote never sees the passphrase.
+- **Client behaviour**: Inline editable notes use `contentEditable` when Edit is enabled. Image uploads accept pasted images, drag-and-drop, or image URLs.
+- **Browser support**: Modern evergreen browsers (Chrome, Edge, Firefox, Safari). The Web Crypto APIs require up-to-date browsers for encrypted storage.
+- **No backend**: This project intentionally has no server component; publishing is done by the browser directly to GitHub using a Personal Access Token (PAT).
+
+## Project files (important)
+
+- `index.html` — main single-page UI
+- `assets/css/style.css` — styling and layout
+- `assets/js/app.js` — application logic, data model, publish flow, and edit UI
+- `data/` — place published JSON reviews here (`index.json` optional index, `<matchId>.json` per review)
+- `404.html`, `.nojekyll` — GitHub Pages SPA support
+- `README.md` — this file
+
+Security note: If you enable encrypted storage, the token is encrypted client-side with a passphrase; however, storing tokens locally has inherent risk — revoke any exposed token immediately.
+
 ## Data format
 
 ```json
