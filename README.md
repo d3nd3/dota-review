@@ -5,8 +5,8 @@ Static web app to review Dota matches by match ID. Paste screenshots directly, a
 ## Quick start
 
 - Open with GitHub Pages or any local server
-- Enter a match ID (try `sample`) and click Load
-- Toggle Edit to enable pasting
+- Enter a match ID (try `sample`) and click Load (URL shows `?match=...`)
+- Verify a GitHub token to enable Edit (see Authentication)
 - Paste screenshots (Ctrl/⌘+V) or drag-and-drop image files/URLs
 - Add notes per slide; navigate with ← → or on-screen arrows
 - Export JSON or publish to `data/<matchId>.json`
@@ -58,6 +58,15 @@ Security notes:
 Troubleshooting:
 - `404` or `Permission denied`: Verify scopes/permissions and that the branch exists.
 - `409` conflict: A concurrent update occurred; try again. If updating an existing file, the app auto‑detects the `sha` and includes it in the request.
+
+## Behavior
+
+- Match ID is reflected in the URL (`?match=<id>`) and can be renamed in Edit mode.
+- Filmstrip (thumbnails) is fixed at the bottom; content scrolls beneath it.
+- Slides can be added, deleted, re‑navigated with arrows/keys.
+- Edit mode is gated by verifying a token with push access to the repo/branch.
+- Errors (e.g., missing/invalid token) are shown as on‑screen toasts.
+- A welcome dialog appears on first visit with sample/new options.
 
 ## Local drafts
 

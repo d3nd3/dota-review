@@ -42,6 +42,7 @@
             </div>
             <div class="tools">
                 <button id="addSlideBtn" class="btn">Add Slide</button>
+                <button id="deleteSlideBtn" class="btn subtle">Delete Slide</button>
                 <button id="exportBtn" class="btn">Export JSON</button>
                 <details id="githubPanel" class="gh-panel">
                     <summary>Publish to GitHub</summary>
@@ -51,6 +52,7 @@
                         <input id="ghBranch" placeholder="branch (e.g. gh-pages)" autocomplete="off">
                         <input id="ghToken" placeholder="token (PAT)" autocomplete="off" type="password">
                         <button id="publishBtn" class="btn primary">Publish</button>
+                        <button id="verifyBtn" class="btn">Verify</button>
                     </div>
                 </details>
                 <button id="helpBtn" class="btn subtle">Help</button>
@@ -94,6 +96,18 @@
         <section class="filmstrip" id="filmstrip"></section>
     </main>
 
+    <dialog id="welcomeDialog" class="dialog welcome">
+        <form method="dialog">
+            <h2>Welcome to Dota Review</h2>
+            <p>Paste Dota screenshots, add notes per slide, score the performance, and publish JSON to GitHub.</p>
+            <div class="welcome-actions">
+                <button id="welcomeSampleBtn" class="btn">Try sample</button>
+                <button id="welcomeNewBtn" class="btn primary">Start new</button>
+                <button class="btn" value="cancel">Close</button>
+            </div>
+        </form>
+    </dialog>
+
     <dialog id="helpDialog" class="dialog">
         <form method="dialog">
             <h3>How to use</h3>
@@ -107,6 +121,8 @@
             <button class="btn">Close</button>
         </form>
     </dialog>
+
+    <div id="toastContainer" class="toast-container"></div>
 
     <script src="./assets/js/app.js" type="module"></script>
 </body>

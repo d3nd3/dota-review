@@ -6,6 +6,7 @@ const state = {
   slideIndex: 0,
   edit: false,
   autosaveKey: null,
+  verified: false,
 };
 
 // Elements
@@ -19,8 +20,13 @@ const ratingValue = $("#ratingValue");
 const addSlideBtn = $("#addSlideBtn");
 const exportBtn = $("#exportBtn");
 const publishBtn = $("#publishBtn");
+const verifyBtn = $("#verifyBtn");
+const deleteSlideBtn = $("#deleteSlideBtn");
 const helpBtn = $("#helpBtn");
 const helpDialog = $("#helpDialog");
+const welcomeDialog = $("#welcomeDialog");
+const welcomeSampleBtn = $("#welcomeSampleBtn");
+const welcomeNewBtn = $("#welcomeNewBtn");
 const imageEl = $("#slideImage");
 const navPrev = $("#navPrev");
 const navNext = $("#navNext");
@@ -32,6 +38,7 @@ const clearNotesBtn = $("#clearNotesBtn");
 const emptyState = $("#emptyState");
 const emptyAddBtn = $("#emptyAddBtn");
 const filmstrip = $("#filmstrip");
+const toastContainer = $("#toastContainer");
 
 const ghOwner = $("#ghOwner");
 const ghRepo = $("#ghRepo");
@@ -41,7 +48,17 @@ const ghToken = $("#ghToken");
 function setEdit(on){
   state.edit = !!on;
   editToggle.checked = state.edit;
+  setControlsEnabled(state.edit);
   renderSlide();
+}
+
+function setControlsEnabled(enabled){
+  ratingInput.disabled = !enabled;
+  noteInput.disabled = !enabled;
+  addNoteBtn.disabled = !enabled;
+  clearNotesBtn.disabled = !enabled;
+  addSlideBtn.disabled = !enabled;
+  deleteSlideBtn.disabled = !enabled;
 }
 
 function updateAutosaveKey(){
@@ -90,6 +107,8 @@ function renderAll(){
   renderSlide();
   renderFilmstrip();
   saveLocal();
+  updateUrl();
+  updateTitle();
 }
 
 function currentSlide(){
@@ -132,6 +151,19 @@ function renderFilmstrip(){
   });
 }
 
+function updateUrl(){
+  try{
+    const url = new URL(window.location.href);
+    if(state.data.matchId){ url.searchParams.set("match", state.data.matchId); }
+    else { url.searchParams.delete("match"); }
+    history.replaceState(null, "", `${url.pathname}?${url.searchParams.toString()}${url.hash}`);
+  }catch{}
+}
+
+function updateTitle(){
+  document.title = state.data.matchId ? `Dota Review – ${state.data.matchId}` : "Dota Review";
+}
+
 function addSlideFromImage(src){
   state.data.slides.push({ image: src, notes: [] });
   state.slideIndex = state.data.slides.length - 1;
@@ -141,6 +173,14 @@ function addSlideFromImage(src){
 function addEmptySlide(){
   state.data.slides.push({ image: "", notes: [] });
   state.slideIndex = state.data.slides.length - 1;
+  renderAll();
+}
+
+function deleteCurrentSlide(){
+  if(!state.edit){ showToast("Enable Edit to delete slides.", "error"); return; }
+  if(!state.data.slides.length) return;
+  state.data.slides.splice(state.slideIndex, 1);
+  if(state.slideIndex > 0) state.slideIndex -= 1;
   renderAll();
 }
 
@@ -234,7 +274,7 @@ async function publishToGitHub(){
   const branch = ghBranch.value.trim() || "gh-pages";
   const token = ghToken.value.trim();
   const path = `data/${encodeURIComponent(state.data.matchId)}.json`;
-  if(!owner || !repo || !token){ alert("Enter owner, repo, and token"); return; }
+  if(!owner || !repo || !token){ showToast("Enter owner, repo, and token.", "error"); return; }
   const api = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
 
   // Get existing file sha if present
@@ -255,10 +295,11 @@ async function publishToGitHub(){
   });
   if(!res.ok){
     const t = await res.text();
-    alert(`Publish failed: ${res.status} ${t}`);
+    showToast(`Publish failed: ${res.status}`, "error");
+    console.error(t);
     return;
   }
-  alert("Published to GitHub.");
+  showToast("Published to GitHub.");
 }
 
 function blobToBase64(blob){
@@ -277,17 +318,84 @@ function onKey(e){
   if(e.target && ["INPUT","TEXTAREA"].includes(e.target.tagName)) return;
   if(e.key === "ArrowLeft") nav(-1);
   if(e.key === "ArrowRight") nav(1);
+  if(e.key === "Delete") deleteCurrentSlide();
+}
+
+function onEditToggleChange(){
+  if(editToggle.checked){
+    // Gate by verification
+    if(!state.verified){
+      verifyAccess().then(ok => { if(ok){ setEdit(true); } else { editToggle.checked = false; } });
+    } else {
+      setEdit(true);
+    }
+  } else {
+    setEdit(false);
+  }
+}
+
+async function verifyAccess({ silent } = { silent: false }){
+  const owner = ghOwner.value.trim();
+  const repo = ghRepo.value.trim();
+  const branch = (ghBranch.value.trim() || "gh-pages");
+  const token = ghToken.value.trim();
+  if(!owner || !repo || !token){ showToast("Enter owner, repo, and token.", "error"); state.verified = false; updateVerifyUi(); return false; }
+  try{
+    const repoRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers: { Authorization: `token ${token}` } });
+    if(!repoRes.ok){ state.verified = false; updateVerifyUi(); showToast(`Repo access failed (${repoRes.status}).`, "error"); return false; }
+    const repoJson = await repoRes.json();
+    if(!repoJson.permissions || !repoJson.permissions.push){ state.verified = false; updateVerifyUi(); showToast("Token lacks push permission to repo.", "error"); return false; }
+    const brRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/branches/${encodeURIComponent(branch)}`, { headers: { Authorization: `token ${token}` } });
+    if(!brRes.ok){ state.verified = false; updateVerifyUi(); showToast("Branch not found or no access.", "error"); return false; }
+    state.verified = true;
+    updateVerifyUi();
+    if(!silent) showToast("Token verified. You can now enable Edit.");
+    return true;
+  }catch(err){
+    console.error(err);
+    state.verified = false; updateVerifyUi();
+    showToast("Verification failed.", "error");
+    return false;
+  }
+}
+
+function updateVerifyUi(){
+  editToggle.disabled = !state.verified;
+  editToggle.title = state.verified ? "" : "Verify token to enable Edit";
+}
+
+function showToast(message, type){
+  const el = document.createElement("div");
+  el.className = "toast" + (type === "error" ? " error" : "");
+  el.textContent = message;
+  toastContainer?.appendChild(el);
+  setTimeout(() => { el.remove(); }, 4000);
+}
+
+function renameMatchId(newId){
+  const nid = String(newId || "").trim();
+  if(!nid) return;
+  const oldKey = state.autosaveKey;
+  state.data.matchId = nid;
+  updateAutosaveKey();
+  if(oldKey && oldKey !== state.autosaveKey){
+    try{ localStorage.removeItem(oldKey); }catch{}
+  }
+  renderAll();
 }
 
 // Wire up
 loadBtn.addEventListener("click", () => loadMatch());
-newBtn.addEventListener("click", () => { newMatch(""); setEdit(true); });
-matchIdInput.addEventListener("keydown", (e) => { if(e.key === "Enter") loadMatch(); });
-editToggle.addEventListener("change", () => setEdit(editToggle.checked));
+newBtn.addEventListener("click", () => { newMatch(""); /* edit remains gated */ });
+matchIdInput.addEventListener("keydown", (e) => { if(e.key === "Enter"){ if(state.edit){ e.preventDefault(); renameMatchId(matchIdInput.value); } else { loadMatch(); } } });
+matchIdInput.addEventListener("change", () => { if(state.edit){ renameMatchId(matchIdInput.value); } });
+editToggle.addEventListener("change", onEditToggleChange);
 ratingInput.addEventListener("input", () => { state.data.rating = Number(ratingInput.value); ratingValue.textContent = ratingInput.value; saveLocal(); });
 addSlideBtn.addEventListener("click", addEmptySlide);
+deleteSlideBtn.addEventListener("click", deleteCurrentSlide);
 exportBtn.addEventListener("click", exportJSON);
 publishBtn?.addEventListener("click", publishToGitHub);
+verifyBtn?.addEventListener("click", () => verifyAccess());
 helpBtn.addEventListener("click", () => helpDialog.showModal());
 document.addEventListener("keydown", onKey);
 document.addEventListener("paste", handlePaste);
@@ -299,10 +407,26 @@ navNext.addEventListener("click", () => nav(1));
 emptyAddBtn.addEventListener("click", addEmptySlide);
 setupDragDrop();
 
+// Invalidate verification if GH fields change
+[ghOwner, ghRepo, ghBranch, ghToken].forEach(el => el?.addEventListener("input", () => { state.verified = false; updateVerifyUi(); if(state.edit){ setEdit(false); showToast("Edit disabled: token changed.", "error"); } }));
+
 // Initial load: if URL has ?match=123 or hash
 const url = new URL(location.href);
 const q = url.searchParams.get("match") || (location.hash.startsWith("#") ? location.hash.slice(1) : "");
 if(q){ loadMatch(q); }
-else { newMatch(""); setEdit(true); }
+else {
+  // Show welcome on first visit
+  try{
+    const seen = localStorage.getItem("dota-review:welcomed");
+    if(!seen && welcomeDialog){ welcomeDialog.showModal(); }
+  }catch{}
+}
+
+welcomeSampleBtn?.addEventListener("click", (e) => { e.preventDefault(); try{ localStorage.setItem("dota-review:welcomed", "1"); }catch{}; welcomeDialog?.close(); loadMatch("sample"); });
+welcomeNewBtn?.addEventListener("click", (e) => { e.preventDefault(); try{ localStorage.setItem("dota-review:welcomed", "1"); }catch{}; welcomeDialog?.close(); newMatch(""); });
+
+// Start with edit disabled until verification
+updateVerifyUi();
+setControlsEnabled(false);
 
 
