@@ -7,6 +7,7 @@ const state = {
   edit: false,
   autosaveKey: null,
   verified: false,
+  selectedNoteIndex: null,
 };
 
 // Elements
@@ -241,6 +242,11 @@ function renderSlide(){
       // reflect sentiment on bullet for clearer visibility
       b.className = 'bullet ' + (noteSentiment || '');
       sentiment.title = noteSentiment || '';
+
+      // when clicking the note text, mark this note as selected so the input radios reflect it
+      t.addEventListener('focus', () => { state.selectedNoteIndex = i; syncNoteSentimentToControls(i); });
+      t.addEventListener('click', () => { state.selectedNoteIndex = i; syncNoteSentimentToControls(i); });
+
       sentiment.addEventListener('click', () => {
         if(!state.edit) return; // only interactive in edit mode
         // cycle sentiment: '' -> positive -> neutral -> negative -> ''
@@ -252,6 +258,8 @@ function renderSlide(){
         // persist back
         cur.notes[i] = noteSentiment ? { text: String(t.textContent || '').trim(), sentiment: noteSentiment } : String(t.textContent || '').trim();
         saveLocal();
+        // keep controls in sync
+        state.selectedNoteIndex = i; syncNoteSentimentToControls(i);
       });
       // save on blur
       t.addEventListener("blur", (ev) => {
@@ -345,6 +353,20 @@ function addNote(){
   noteInput.value = "";
   renderSlide();
   saveLocal();
+}
+
+// Sync selected note's sentiment into the input radio controls
+function syncNoteSentimentToControls(index){
+  try{
+    const slide = currentSlide();
+    if(!slide || index === null || index === undefined) return;
+    const note = slide.notes[index];
+    let s = '';
+    if(typeof note === 'string') s = '';
+    else if(note && typeof note === 'object') s = note.sentiment || '';
+    const sel = document.querySelectorAll('input[name="noteSentiment"]');
+    sel.forEach(r => { r.checked = (r.value === s); });
+  }catch{}
 }
 
 function removeNoteAt(index){
