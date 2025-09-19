@@ -202,15 +202,33 @@ function renderSlide(){
     const note = cur.notes[i];
     const li = document.createElement("li");
     const b = document.createElement("div"); b.className = "bullet"; b.textContent = "•";
+    const sentiment = document.createElement('div'); sentiment.className = 'sentiment';
+    // note may be stored as either string or {text, sentiment}
+    let noteText = '';
+    let noteSentiment = '';
+    if(typeof note === 'string') { noteText = note; }
+    else if(note && typeof note === 'object'){ noteText = note.text || ''; noteSentiment = note.sentiment || ''; }
     const t = document.createElement("div"); t.className = "text";
     if(state.edit){
       t.contentEditable = true;
       t.spellcheck = false;
-      t.textContent = note;
+      t.textContent = noteText;
+      sentiment.textContent = noteSentiment === 'positive' ? '🟢' : (noteSentiment === 'negative' ? '🔴' : (noteSentiment === 'neutral' ? '🟡' : ''));
+      sentiment.title = noteSentiment || '';
+      sentiment.addEventListener('click', () => {
+        // cycle sentiment: '' -> positive -> neutral -> negative -> ''
+        const next = noteSentiment === '' ? 'positive' : (noteSentiment === 'positive' ? 'neutral' : (noteSentiment === 'neutral' ? 'negative' : ''));
+        noteSentiment = next;
+        sentiment.textContent = noteSentiment === 'positive' ? '🟢' : (noteSentiment === 'negative' ? '🔴' : (noteSentiment === 'neutral' ? '🟡' : ''));
+        sentiment.title = noteSentiment || '';
+        // persist back
+        cur.notes[i] = noteSentiment ? { text: String(t.textContent || '').trim(), sentiment: noteSentiment } : String(t.textContent || '').trim();
+        saveLocal();
+      });
       // save on blur
       t.addEventListener("blur", (ev) => {
         const v = String(ev.target.textContent || "").trim();
-        cur.notes[i] = v;
+        cur.notes[i] = noteSentiment ? { text: v, sentiment: noteSentiment } : v;
         saveLocal();
       });
       // Save on Enter and prevent newline
@@ -218,11 +236,13 @@ function renderSlide(){
         if(ev.key === "Enter"){ ev.preventDefault(); t.blur(); }
       });
     } else {
-      t.textContent = note;
+      // show sentiment when not editing
+      if(typeof note === 'string'){ t.textContent = note; }
+      else { t.textContent = note.text || ''; sentiment.textContent = note.sentiment === 'positive' ? '🟢' : (note.sentiment === 'negative' ? '🔴' : (note.sentiment === 'neutral' ? '🟡' : '')); }
     }
     const del = document.createElement("button"); del.className = "del"; del.textContent = "×";
     del.addEventListener("click", () => { removeNoteAt(i); });
-    li.appendChild(b); li.appendChild(t); li.appendChild(del);
+    li.appendChild(b); li.appendChild(t); li.appendChild(sentiment); li.appendChild(del);
     notesList.appendChild(li);
   }
 }
@@ -254,6 +274,15 @@ function updateTitle(){
 }
 
 function addSlideFromImage(src){
+  // If there's a current slide without an image, paste into it instead of creating a new slide
+  if(!state.data.slides) state.data.slides = [];
+  const cur = currentSlide();
+  if(cur && !cur.image){
+    cur.image = src;
+    // Keep current index
+    renderAll();
+    return;
+  }
   state.data.slides.push({ image: src, notes: [] });
   state.slideIndex = state.data.slides.length - 1;
   renderAll();
@@ -274,11 +303,16 @@ function deleteCurrentSlide(){
 }
 
 function addNote(){
-  const val = (noteInput.value || "").trim();
+  let val = (noteInput.value || "").trim();
   if(!val) return;
+  // Detect sentiment prefixes: "+ ", "- ", "~ "
+  let sentiment = '';
+  if(val.startsWith('+ ')){ sentiment = 'positive'; val = val.slice(2).trim(); }
+  else if(val.startsWith('- ')){ sentiment = 'negative'; val = val.slice(2).trim(); }
+  else if(val.startsWith('~ ')){ sentiment = 'neutral'; val = val.slice(2).trim(); }
   const slide = currentSlide();
   if(!slide){ return; }
-  slide.notes.push(val);
+  slide.notes.push(sentiment ? { text: val, sentiment } : val);
   noteInput.value = "";
   renderSlide();
   saveLocal();
@@ -501,6 +535,36 @@ async function loadPublished(){
   }catch{return []}
 }
 
+// Populate the publishedList node and wire click handlers
+async function populatePublishedList(){
+  try{
+    const list = await loadPublished();
+    const node = document.getElementById('publishedList');
+    if(!node) return;
+    node.innerHTML = '';
+    if(list.length === 0){ node.innerHTML = '<div class="empty-published">No published matches</div>'; return; }
+    for(const p of list){
+      const item = document.createElement('div'); item.className = 'published-item';
+      const img = document.createElement('img'); img.src = p.image || ''; img.className = 'pub-thumb';
+      const meta = document.createElement('div'); meta.className = 'pub-meta';
+      const title = document.createElement('div'); title.className = 'pub-title'; title.textContent = p.matchId;
+      const sub = document.createElement('div'); sub.className = 'pub-sub'; sub.textContent = `${p.hero || ''} • ${p.ts ? new Date(p.ts).toLocaleString() : ''}`;
+      meta.appendChild(title); meta.appendChild(sub);
+      item.appendChild(img); item.appendChild(meta);
+      // load on click
+      item.addEventListener('click', () => { try{ localStorage.setItem('dota-review:welcomed','1'); }catch{}; welcomeDialog?.close(); loadMatch(p.matchId); });
+      // show delete control when verified
+      if(state.verified){
+        const delBtn = document.createElement('button'); delBtn.className = 'btn small subtle'; delBtn.textContent = 'Delete';
+        delBtn.style.marginLeft = '12px';
+        delBtn.addEventListener('click', (ev) => { ev.stopPropagation(); deletePublishedMatch(p.matchId); });
+        item.appendChild(delBtn);
+      }
+      node.appendChild(item);
+    }
+  }catch{}
+}
+
 // Wire up
 loadBtn.addEventListener("click", () => loadMatch());
 newBtn.addEventListener("click", () => { newMatch(""); /* edit remains gated */ });
@@ -539,41 +603,14 @@ else {
   // Show welcome on first visit
   try{
     const seen = localStorage.getItem("dota-review:welcomed");
-    if(!seen && welcomeDialog){ welcomeDialog.showModal(); }
+    if(!seen && welcomeDialog){ await populatePublishedList(); welcomeDialog.showModal(); }
   }catch{}
 }
 
 welcomeSampleBtn?.addEventListener("click", (e) => { e.preventDefault(); try{ localStorage.setItem("dota-review:welcomed", "1"); }catch{}; welcomeDialog?.close(); loadMatch("sample"); });
 welcomeNewBtn?.addEventListener("click", (e) => { e.preventDefault(); try{ localStorage.setItem("dota-review:welcomed", "1"); }catch{}; welcomeDialog?.close(); newMatch(""); });
 
-showWelcomeBtn?.addEventListener("click", async () => {
-  try{
-    const list = await loadPublished();
-    const node = document.getElementById('publishedList');
-    node.innerHTML = '';
-    if(list.length === 0){ node.innerHTML = '<div class="empty-published">No published matches</div>'; }
-    for(const p of list){
-      const item = document.createElement('div'); item.className = 'published-item';
-      const img = document.createElement('img'); img.src = p.image || ''; img.className = 'pub-thumb';
-      const meta = document.createElement('div'); meta.className = 'pub-meta';
-      const title = document.createElement('div'); title.className = 'pub-title'; title.textContent = p.matchId;
-      const sub = document.createElement('div'); sub.className = 'pub-sub'; sub.textContent = `${p.hero || ''} • ${p.ts ? new Date(p.ts).toLocaleString() : ''}`;
-      meta.appendChild(title); meta.appendChild(sub);
-      item.appendChild(img); item.appendChild(meta);
-      // load on click
-      item.addEventListener('click', () => { try{ localStorage.setItem('dota-review:welcomed','1'); }catch{}; welcomeDialog?.close(); loadMatch(p.matchId); });
-      // show delete control when verified
-      if(state.verified){
-        const delBtn = document.createElement('button'); delBtn.className = 'btn small subtle'; delBtn.textContent = 'Delete';
-        delBtn.style.marginLeft = '12px';
-        delBtn.addEventListener('click', (ev) => { ev.stopPropagation(); deletePublishedMatch(p.matchId); });
-        item.appendChild(delBtn);
-      }
-      node.appendChild(item);
-    }
-    welcomeDialog.showModal();
-  }catch{}
-});
+showWelcomeBtn?.addEventListener("click", async () => { await populatePublishedList(); welcomeDialog.showModal(); });
 
 // Helper to get file SHA for a path
 async function getFileSha(owner, repo, path, branch, token){
