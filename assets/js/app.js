@@ -48,6 +48,21 @@ const ghRepo = $("#ghRepo");
 const ghBranch = $("#ghBranch");
 const ghToken = $("#ghToken");
 
+// Load saved GitHub credentials (owner/repo/branch/token) if present
+function loadSavedCredentials(){
+  try{
+    const raw = localStorage.getItem('dota-review:gh');
+    if(!raw) return;
+    const cred = JSON.parse(raw);
+    if(cred.owner) ghOwner.value = cred.owner;
+    if(cred.repo) ghRepo.value = cred.repo;
+    if(cred.branch) ghBranch.value = cred.branch;
+    if(cred.token) ghToken.value = cred.token;
+    // attempt silent verification
+    if(cred.token){ verifyAccess({ silent: true }); }
+  }catch(err){ /* ignore */ }
+}
+
 function setEdit(on){
   state.edit = !!on;
   editToggle.checked = state.edit;
@@ -378,6 +393,10 @@ async function verifyAccess({ silent } = { silent: false }){
     if(!brRes.ok){ state.verified = false; updateVerifyUi(); showToast("Branch not found or no access.", "error"); return false; }
     state.verified = true;
     updateVerifyUi();
+    // Persist credentials locally for convenience (token stored in localStorage)
+    try{
+      localStorage.setItem('dota-review:gh', JSON.stringify({ owner, repo, branch, token }));
+    }catch{}
     if(!silent) showToast("Token verified. You can now enable Edit.");
     return true;
   }catch(err){
@@ -446,6 +465,9 @@ navPrev.addEventListener("click", () => nav(-1));
 navNext.addEventListener("click", () => nav(1));
 emptyAddBtn.addEventListener("click", addEmptySlide);
 setupDragDrop();
+
+// Load saved GH credentials on startup
+loadSavedCredentials();
 
 // Invalidate verification if GH fields change
 [ghOwner, ghRepo, ghBranch, ghToken].forEach(el => el?.addEventListener("input", () => { state.verified = false; updateVerifyUi(); if(state.edit){ setEdit(false); showToast("Edit disabled: token changed.", "error"); } }));
