@@ -281,6 +281,24 @@ function renderSlide(){
     li.appendChild(b); li.appendChild(t); li.appendChild(sentiment); li.appendChild(del);
     notesList.appendChild(li);
   }
+  // keep input radios in sync with selected note (if any)
+  if(state.selectedNoteIndex !== null && state.selectedNoteIndex !== undefined){ syncNoteSentimentToControls(state.selectedNoteIndex); }
+}
+
+// Focus the editable text element for a given note index (if present)
+function focusNoteAt(index){
+  try{
+    const li = notesList.children[index];
+    if(!li) return;
+    const t = li.querySelector('.text');
+    if(!t) return;
+    t.focus();
+    // place caret at end
+    const range = document.createRange();
+    range.selectNodeContents(t);
+    range.collapse(false);
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+  }catch{}
 }
 
 function renderFilmstrip(){
@@ -365,7 +383,21 @@ function syncNoteSentimentToControls(index){
     if(typeof note === 'string') s = '';
     else if(note && typeof note === 'object') s = note.sentiment || '';
     const sel = document.querySelectorAll('input[name="noteSentiment"]');
-    sel.forEach(r => { r.checked = (r.value === s); });
+    sel.forEach(r => { r.checked = (r.value === s); r.addEventListener('change', () => {
+      if(r.checked){
+        // when user changes radio, update selected note's sentiment immediately
+        if(state.selectedNoteIndex !== null && state.selectedNoteIndex !== undefined){
+          const slide2 = currentSlide();
+          const note2 = slide2.notes[state.selectedNoteIndex];
+          const text = (typeof note2 === 'string') ? note2 : (note2 && note2.text) || '';
+          slide2.notes[state.selectedNoteIndex] = r.value ? { text: text, sentiment: r.value } : text;
+          saveLocal();
+          renderSlide();
+          // keep selection focused
+          focusNoteAt(state.selectedNoteIndex);
+        }
+      }
+    }); });
   }catch{}
 }
 
