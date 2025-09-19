@@ -1,5 +1,5 @@
 // Dota Review App - static, GitHub Pages friendly
-// Data shape: { matchId: string, rating: number, slides: [{ image: string(base64 or url), notes: string[], hero?: string }] }
+// Data shape: { matchId: string, rating: number, hero?: string, slides: [{ image: string(base64 or url), notes: string[] }] }
 
 // Dota 2 Heroes data
 const DOTA_HEROES = [
@@ -333,7 +333,14 @@ function updateHeroPortrait(){
   if(heroId){
     const hero = DOTA_HEROES.find(h => h.id === heroId);
     if(hero){
-      matchHeroPortrait.innerHTML = `<img src="https://cdn.cloudflare.steamstatic.com/apps/dota2/images/heroes/${heroId}_icon.png" alt="${hero.localized_name}" title="${hero.localized_name}">`;
+      // Use Liquipedia icon URL format
+      // Note: The path generation may need adjustment for some heroes
+      // e.g., "Alchemist" -> "a/al/Alchemist_icon_dota2_gameasset.png"
+      const name = hero.localized_name.replace(/\s+/g, ''); // Remove spaces
+      const firstLetter = name.charAt(0).toLowerCase();
+      const firstTwo = name.substring(0, 2).toLowerCase();
+      const iconUrl = `https://liquipedia.net/commons/images/${firstLetter}/${firstTwo}/${name}_icon_dota2_gameasset.png`;
+      matchHeroPortrait.innerHTML = `<img src="${iconUrl}" alt="${hero.localized_name}" title="${hero.localized_name}">`;
       matchHeroPortrait.style.display = '';
     } else {
       matchHeroPortrait.style.display = 'none';
@@ -481,7 +488,6 @@ function renderFilmstrip(){
     const th = document.createElement("div"); th.className = "thumb" + (i===state.slideIndex ? " active" : "");
     const img = document.createElement("img"); img.src = s.image || "";
     const idx = document.createElement("div"); idx.className = "index"; idx.textContent = String(i+1);
-    if(s.hero){ idx.title = s.hero; }
     th.appendChild(img); th.appendChild(idx);
     th.addEventListener("click", () => { state.slideIndex = i; renderSlide(); renderFilmstrip(); });
     filmstrip.appendChild(th);
@@ -830,11 +836,31 @@ async function populatePublishedList(){
     for(const p of list){
       const item = document.createElement('div'); item.className = 'published-item';
       const img = document.createElement('img'); img.src = p.image || ''; img.className = 'pub-thumb';
+
+      // Add hero portrait if hero is specified
+      let heroPortrait = null;
+      if(p.hero){
+        const hero = DOTA_HEROES.find(h => h.id === p.hero);
+        if(hero){
+          heroPortrait = document.createElement('img');
+          heroPortrait.className = 'pub-hero-portrait';
+          // Use same URL generation logic as updateHeroPortrait
+          const name = hero.localized_name.replace(/\s+/g, '');
+          const firstLetter = name.charAt(0).toLowerCase();
+          const firstTwo = name.substring(0, 2).toLowerCase();
+          heroPortrait.src = `https://liquipedia.net/commons/images/${firstLetter}/${firstTwo}/${name}_icon_dota2_gameasset.png`;
+          heroPortrait.alt = hero.localized_name;
+          heroPortrait.title = hero.localized_name;
+        }
+      }
+
       const meta = document.createElement('div'); meta.className = 'pub-meta';
       const title = document.createElement('div'); title.className = 'pub-title'; title.textContent = p.matchId;
       const sub = document.createElement('div'); sub.className = 'pub-sub'; sub.textContent = `${p.hero || ''} • ${p.ts ? new Date(p.ts).toLocaleString() : ''}`;
       meta.appendChild(title); meta.appendChild(sub);
-      item.appendChild(img); item.appendChild(meta);
+      item.appendChild(img);
+      if(heroPortrait) item.appendChild(heroPortrait);
+      item.appendChild(meta);
       // load on click
       item.addEventListener('click', () => { try{ localStorage.setItem('dota-review:welcomed','1'); }catch{}; welcomeDialog?.close(); loadMatch(p.matchId); });
       // show delete control when verified
@@ -867,7 +893,6 @@ document.addEventListener("keydown", onKey);
 document.addEventListener("paste", handlePaste);
 noteInput.addEventListener("keydown", (e) => { if(e.key === "Enter"){ e.preventDefault(); addNote(); }});
 addNoteBtn.addEventListener("click", addNote);
-heroInput?.addEventListener("input", () => { const s = currentSlide(); if(!s) return; s.hero = heroInput.value; saveLocal(); });
 clearNotesBtn.addEventListener("click", () => { const s = currentSlide(); if(!s) return; s.notes = []; renderSlide(); saveLocal(); });
 navPrev.addEventListener("click", () => nav(-1));
 navNext.addEventListener("click", () => nav(1));
