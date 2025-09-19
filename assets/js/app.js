@@ -122,20 +122,22 @@ function currentSlide(){
 
 function renderSlide(){
   const slide = currentSlide();
-  if(!slide){
+  // Show empty state only when there are absolutely no slides for this match
+  emptyState.hidden = !!(state.data.slides && state.data.slides.length > 0);
+  const slideExists = !!(state.data.slides && state.data.slides.length > 0 && state.data.slides[state.slideIndex]);
+  if(!slideExists){
     imageEl.src = "";
-    // Show empty state only when no slides at all
-    emptyState.hidden = state.data.slides.length !== 0;
     notesList.innerHTML = "";
     pasteHint.style.display = state.edit ? "flex" : "none";
+    if(heroInput){ heroInput.value = state.data.hero || ""; heroInput.disabled = !state.edit; }
     return;
   }
-  emptyState.hidden = state.data.slides.length === 0 ? false : true;
-  imageEl.src = slide.image || "";
-  pasteHint.style.display = (state.edit && !slide.image) ? "flex" : "none";
-  if(heroInput){ heroInput.value = slide.hero || ""; heroInput.disabled = !state.edit; }
+  const cur = state.data.slides[state.slideIndex];
+  imageEl.src = cur.image || "";
+  pasteHint.style.display = (state.edit && !cur.image) ? "flex" : "none";
+  if(matchHeroInput){ matchHeroInput.value = state.data.hero || ""; matchHeroInput.disabled = !state.edit; }
   notesList.innerHTML = "";
-  for(const note of slide.notes || []){
+  for(const note of cur.notes || []){
     const li = document.createElement("li");
     const b = document.createElement("div"); b.className = "bullet"; b.textContent = "•";
     const t = document.createElement("div"); t.className = "text"; t.textContent = note;
@@ -173,13 +175,13 @@ function updateTitle(){
 }
 
 function addSlideFromImage(src){
-  state.data.slides.push({ image: src, notes: [], hero: heroInput?.value?.trim() || "" });
+  state.data.slides.push({ image: src, notes: [] });
   state.slideIndex = state.data.slides.length - 1;
   renderAll();
 }
 
 function addEmptySlide(){
-  state.data.slides.push({ image: "", notes: [], hero: heroInput?.value?.trim() || "" });
+  state.data.slides.push({ image: "", notes: [] });
   state.slideIndex = state.data.slides.length - 1;
   renderAll();
 }
