@@ -35,6 +35,8 @@
 .gh-panel summary{cursor:pointer;color:var(--muted)}
 .gh-grid{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr)) auto;gap:8px;margin-top:8px}
 .gh-grid input{height:32px;padding:0 10px;background:#0e1216;border:1px solid var(--border);border-radius:8px;color:var(--text)}
+.save-opt{grid-column:5 / span 1;align-self:center;color:var(--muted);font-size:13px}
+.save-opt input{margin-right:6px}
 
 .viewer{background:var(--bg-elev);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
 .slide{display:grid;grid-template-columns:1.3fr .8fr;gap:0}

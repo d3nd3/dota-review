@@ -51,6 +51,18 @@ const ghToken = $("#ghToken");
 // Load saved GitHub credentials (owner/repo/branch/token) if present
 function loadSavedCredentials(){
   try{
+    // prefer encrypted credentials if present
+    const encRaw = localStorage.getItem('dota-review:gh_enc');
+    if(encRaw){
+      const ecred = JSON.parse(encRaw);
+      if(ecred.owner) ghOwner.value = ecred.owner;
+      if(ecred.repo) ghRepo.value = ecred.repo;
+      if(ecred.branch) ghBranch.value = ecred.branch;
+      // do not populate ghToken; require explicit verify to decrypt
+      window._dota_review_saved_encrypted = ecred; // temp global for verify flow
+      showToast('Encrypted credentials found. Click Verify to unlock.');
+      return;
+    }
     const raw = localStorage.getItem('dota-review:gh');
     if(!raw) return;
     const cred = JSON.parse(raw);
@@ -61,6 +73,40 @@ function loadSavedCredentials(){
     // attempt silent verification
     if(cred.token){ verifyAccess({ silent: true }); }
   }catch(err){ /* ignore */ }
+}
+
+// --- Web Crypto helpers for token encryption ---
+async function deriveKey(pass, salt){
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(pass), { name: 'PBKDF2' }, false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['encrypt','decrypt']);
+}
+
+function bufToB64(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))); }
+function b64ToBuf(b64){ const s = atob(b64); const arr = new Uint8Array(s.length); for(let i=0;i<s.length;i++) arr[i]=s.charCodeAt(i); return arr.buffer; }
+
+async function encryptToken(pass, token){
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveKey(pass, salt.buffer);
+  const enc = new TextEncoder();
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(token));
+  // store salt|iv|ct as base64 joined by dots
+  return `${bufToB64(salt.buffer)}.${bufToB64(iv.buffer)}.${bufToB64(ct)}`;
+}
+
+async function decryptToken(pass, data){
+  try{
+    const [saltB64, ivB64, ctB64] = String(data).split('.');
+    if(!saltB64 || !ivB64 || !ctB64) throw new Error('bad');
+    const salt = b64ToBuf(saltB64);
+    const iv = new Uint8Array(b64ToBuf(ivB64));
+    const ct = b64ToBuf(ctB64);
+    const key = await deriveKey(pass, salt);
+    const dec = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+    const decStr = new TextDecoder().decode(dec);
+    return decStr;
+  }catch(e){ throw e; }
 }
 
 function setEdit(on){
@@ -393,9 +439,22 @@ async function verifyAccess({ silent } = { silent: false }){
     if(!brRes.ok){ state.verified = false; updateVerifyUi(); showToast("Branch not found or no access.", "error"); return false; }
     state.verified = true;
     updateVerifyUi();
-    // Persist credentials locally for convenience (token stored in localStorage)
+    // Persist credentials locally for convenience (plain token) or encrypted
     try{
-      localStorage.setItem('dota-review:gh', JSON.stringify({ owner, repo, branch, token }));
+      const saveEnc = document.getElementById('saveEncrypted')?.checked;
+      if(saveEnc){
+        // encrypt token with passphrase
+        const pass = prompt('Enter passphrase to encrypt token (remember it)');
+        if(pass){
+          const enc = await encryptToken(pass, token);
+          const store = { owner, repo, branch, encrypted: enc };
+          localStorage.setItem('dota-review:gh_enc', JSON.stringify(store));
+          // keep a temp global to allow decrypt on verify
+          window._dota_review_saved_encrypted = store;
+        }
+      } else {
+        localStorage.setItem('dota-review:gh', JSON.stringify({ owner, repo, branch, token }));
+      }
     }catch{}
     if(!silent) showToast("Token verified. You can now enable Edit.");
     return true;
@@ -506,6 +565,27 @@ showWelcomeBtn?.addEventListener("click", async () => {
     }
     welcomeDialog.showModal();
   }catch{}
+});
+
+// If encrypted creds are present and user clicks Verify, allow them to enter passphrase to unlock
+verifyBtn?.addEventListener('click', async () => {
+  if(window._dota_review_saved_encrypted){
+    const pass = prompt('Enter passphrase to decrypt saved credentials:');
+    if(!pass) return;
+    try{
+      const enc = window._dota_review_saved_encrypted.encrypted;
+      const token = await decryptToken(pass, enc);
+      // set token and proceed with verify
+      ghToken.value = token;
+      await verifyAccess({ silent: false });
+      // on success, replace stored plain entry
+      try{ localStorage.setItem('dota-review:gh', JSON.stringify({ owner: window._dota_review_saved_encrypted.owner, repo: window._dota_review_saved_encrypted.repo, branch: window._dota_review_saved_encrypted.branch, token })); }catch{}
+      delete window._dota_review_saved_encrypted;
+    }catch(err){ showToast('Failed to decrypt credentials', 'error'); }
+  } else {
+    // normal verify flow (will persist plain creds)
+    verifyAccess({ silent: false });
+  }
 });
 
 // Start with edit disabled until verification
