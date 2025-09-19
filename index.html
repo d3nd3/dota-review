@@ -89,6 +89,20 @@
                     </div>
                     <ul id="notesList" class="notes-list"></ul>
                     <div class="note-input-row">
+                        <div class="sentiment-controls" aria-hidden="false">
+                            <label class="sent-btn" title="Positive">
+                                <input type="radio" name="noteSentiment" value="positive" id="sentPositive">
+                                <span>👍</span>
+                            </label>
+                            <label class="sent-btn" title="Neutral">
+                                <input type="radio" name="noteSentiment" value="neutral" id="sentNeutral" checked>
+                                <span>🟡</span>
+                            </label>
+                            <label class="sent-btn" title="Negative">
+                                <input type="radio" name="noteSentiment" value="negative" id="sentNegative">
+                                <span>👎</span>
+                            </label>
+                        </div>
                         <input id="noteInput" class="note-input" type="text" placeholder="Type note and press Enter">
                         <button id="addNoteBtn" class="btn small">Add</button>
                     </div>

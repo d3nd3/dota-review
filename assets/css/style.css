@@ -69,6 +69,12 @@
 .note-input-row{display:flex;gap:8px;margin-top:10px}
 .note-input{flex:1;height:36px;padding:0 10px;background:#0b0f13;border:1px solid var(--border);border-radius:10px;color:var(--text)}
 
+.sentiment-controls{display:flex;align-items:center;gap:6px;margin-right:6px}
+.sent-btn{display:inline-flex;align-items:center;justify-content:center;border-radius:8px;padding:6px;background:transparent;border:1px solid var(--border);cursor:pointer}
+.sent-btn input{display:none}
+.sent-btn span{font-size:16px}
+.sent-btn input:checked + span{outline:2px solid rgba(255,255,255,.06);border-radius:6px}
+
 .empty-state{display:flex;align-items:center;justify-content:center;min-height:360px}
 .empty-card{background:#0e1216;border:1px dashed #2a323a;border-radius:14px;padding:20px 24px;text-align:center;color:var(--muted)}
 .empty-title{color:#e1e7ee;font-weight:800}

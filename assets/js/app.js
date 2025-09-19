@@ -328,11 +328,12 @@ function deleteCurrentSlide(){
 function addNote(){
   let val = (noteInput.value || "").trim();
   if(!val) return;
-  // Detect sentiment prefixes: "+ ", "- ", "~ "
+  // Determine sentiment from radio controls if present
   let sentiment = '';
-  if(val.startsWith('+ ')){ sentiment = 'positive'; val = val.slice(2).trim(); }
-  else if(val.startsWith('- ')){ sentiment = 'negative'; val = val.slice(2).trim(); }
-  else if(val.startsWith('~ ')){ sentiment = 'neutral'; val = val.slice(2).trim(); }
+  try{
+    const sel = document.querySelector('input[name="noteSentiment"]:checked');
+    if(sel) sentiment = sel.value;
+  }catch{}
   const slide = currentSlide();
   if(!slide){ return; }
   slide.notes.push(sentiment ? { text: val, sentiment } : val);
