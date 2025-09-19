@@ -39,6 +39,7 @@ const emptyState = $("#emptyState");
 const emptyAddBtn = $("#emptyAddBtn");
 const filmstrip = $("#filmstrip");
 const toastContainer = $("#toastContainer");
+const showWelcomeBtn = $("#showWelcomeBtn");
 
 const ghOwner = $("#ghOwner");
 const ghRepo = $("#ghRepo");
@@ -424,6 +425,8 @@ else {
 
 welcomeSampleBtn?.addEventListener("click", (e) => { e.preventDefault(); try{ localStorage.setItem("dota-review:welcomed", "1"); }catch{}; welcomeDialog?.close(); loadMatch("sample"); });
 welcomeNewBtn?.addEventListener("click", (e) => { e.preventDefault(); try{ localStorage.setItem("dota-review:welcomed", "1"); }catch{}; welcomeDialog?.close(); newMatch(""); });
+
+showWelcomeBtn?.addEventListener("click", () => { try{ welcomeDialog.showModal(); }catch{} });
 
 // Start with edit disabled until verification
 updateVerifyUi();
