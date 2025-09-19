@@ -24,8 +24,11 @@
             <button id="newBtn" class="btn subtle" title="Start a new match">New</button>
         </div>
         <div class="match-hero">
-            <label for="matchHeroInput" class="vis">Match hero</label>
-            <input id="matchHeroInput" class="match-hero-input" type="text" placeholder="Match hero (global)" autocomplete="off">
+            <label for="matchHeroSelect" class="vis">Match hero</label>
+            <select id="matchHeroSelect" class="match-hero-select">
+                <option value="">Select hero...</option>
+            </select>
+            <div id="matchHeroPortrait" class="match-hero-portrait" style="display: none;"></div>
         </div>
         <div class="spacer"></div>
         <div class="mode-controls">

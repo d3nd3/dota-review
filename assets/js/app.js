@@ -1,6 +1,135 @@
 // Dota Review App - static, GitHub Pages friendly
 // Data shape: { matchId: string, rating: number, slides: [{ image: string(base64 or url), notes: string[], hero?: string }] }
 
+// Dota 2 Heroes data
+const DOTA_HEROES = [
+  { id: 'antimage', name: 'Anti-Mage', localized_name: 'Anti-Mage' },
+  { id: 'axe', name: 'Axe', localized_name: 'Axe' },
+  { id: 'bane', name: 'Bane', localized_name: 'Bane' },
+  { id: 'bloodseeker', name: 'Bloodseeker', localized_name: 'Bloodseeker' },
+  { id: 'crystal_maiden', name: 'Crystal Maiden', localized_name: 'Crystal Maiden' },
+  { id: 'drow_ranger', name: 'Drow Ranger', localized_name: 'Drow Ranger' },
+  { id: 'earthshaker', name: 'Earthshaker', localized_name: 'Earthshaker' },
+  { id: 'juggernaut', name: 'Juggernaut', localized_name: 'Juggernaut' },
+  { id: 'mirana', name: 'Mirana', localized_name: 'Mirana' },
+  { id: 'morphling', name: 'Morphling', localized_name: 'Morphling' },
+  { id: 'nevermore', name: 'Shadow Fiend', localized_name: 'Shadow Fiend' },
+  { id: 'phantom_lancer', name: 'Phantom Lancer', localized_name: 'Phantom Lancer' },
+  { id: 'puck', name: 'Puck', localized_name: 'Puck' },
+  { id: 'pudge', name: 'Pudge', localized_name: 'Pudge' },
+  { id: 'razor', name: 'Razor', localized_name: 'Razor' },
+  { id: 'sand_king', name: 'Sand King', localized_name: 'Sand King' },
+  { id: 'storm_spirit', name: 'Storm Spirit', localized_name: 'Storm Spirit' },
+  { id: 'sven', name: 'Sven', localized_name: 'Sven' },
+  { id: 'tiny', name: 'Tiny', localized_name: 'Tiny' },
+  { id: 'vengefulspirit', name: 'Vengeful Spirit', localized_name: 'Vengeful Spirit' },
+  { id: 'windrunner', name: 'Windrunner', localized_name: 'Windrunner' },
+  { id: 'zeus', name: 'Zeus', localized_name: 'Zeus' },
+  { id: 'kunkka', name: 'Kunkka', localized_name: 'Kunkka' },
+  { id: 'lina', name: 'Lina', localized_name: 'Lina' },
+  { id: 'lion', name: 'Lion', localized_name: 'Lion' },
+  { id: 'shadow_shaman', name: 'Shadow Shaman', localized_name: 'Shadow Shaman' },
+  { id: 'slardar', name: 'Slardar', localized_name: 'Slardar' },
+  { id: 'tidehunter', name: 'Tidehunter', localized_name: 'Tidehunter' },
+  { id: 'witch_doctor', name: 'Witch Doctor', localized_name: 'Witch Doctor' },
+  { id: 'lich', name: 'Lich', localized_name: 'Lich' },
+  { id: 'riki', name: 'Riki', localized_name: 'Riki' },
+  { id: 'enigma', name: 'Enigma', localized_name: 'Enigma' },
+  { id: 'tinker', name: 'Tinker', localized_name: 'Tinker' },
+  { id: 'sniper', name: 'Sniper', localized_name: 'Sniper' },
+  { id: 'necrolyte', name: 'Necrophos', localized_name: 'Necrophos' },
+  { id: 'warlock', name: 'Warlock', localized_name: 'Warlock' },
+  { id: 'beastmaster', name: 'Beastmaster', localized_name: 'Beastmaster' },
+  { id: 'queenofpain', name: 'Queen of Pain', localized_name: 'Queen of Pain' },
+  { id: 'venomancer', name: 'Venomancer', localized_name: 'Venomancer' },
+  { id: 'faceless_void', name: 'Faceless Void', localized_name: 'Faceless Void' },
+  { id: 'skeleton_king', name: 'Wraith King', localized_name: 'Wraith King' },
+  { id: 'death_prophet', name: 'Death Prophet', localized_name: 'Death Prophet' },
+  { id: 'phantom_assassin', name: 'Phantom Assassin', localized_name: 'Phantom Assassin' },
+  { id: 'pugna', name: 'Pugna', localized_name: 'Pugna' },
+  { id: 'templar_assassin', name: 'Templar Assassin', localized_name: 'Templar Assassin' },
+  { id: 'viper', name: 'Viper', localized_name: 'Viper' },
+  { id: 'luna', name: 'Luna', localized_name: 'Luna' },
+  { id: 'dragon_knight', name: 'Dragon Knight', localized_name: 'Dragon Knight' },
+  { id: 'dazzle', name: 'Dazzle', localized_name: 'Dazzle' },
+  { id: 'rattletrap', name: 'Clockwerk', localized_name: 'Clockwerk' },
+  { id: 'leshrac', name: 'Leshrac', localized_name: 'Leshrac' },
+  { id: 'furion', name: 'Nature\'s Prophet', localized_name: 'Nature\'s Prophet' },
+  { id: 'life_stealer', name: 'Lifestealer', localized_name: 'Lifestealer' },
+  { id: 'dark_seer', name: 'Dark Seer', localized_name: 'Dark Seer' },
+  { id: 'clinkz', name: 'Clinkz', localized_name: 'Clinkz' },
+  { id: 'omniknight', name: 'Omniknight', localized_name: 'Omniknight' },
+  { id: 'enchantress', name: 'Enchantress', localized_name: 'Enchantress' },
+  { id: 'huskar', name: 'Huskar', localized_name: 'Huskar' },
+  { id: 'night_stalker', name: 'Night Stalker', localized_name: 'Night Stalker' },
+  { id: 'broodmother', name: 'Broodmother', localized_name: 'Broodmother' },
+  { id: 'bounty_hunter', name: 'Bounty Hunter', localized_name: 'Bounty Hunter' },
+  { id: 'weaver', name: 'Weaver', localized_name: 'Weaver' },
+  { id: 'jakiro', name: 'Jakiro', localized_name: 'Jakiro' },
+  { id: 'batrider', name: 'Batrider', localized_name: 'Batrider' },
+  { id: 'chen', name: 'Chen', localized_name: 'Chen' },
+  { id: 'spectre', name: 'Spectre', localized_name: 'Spectre' },
+  { id: 'ancient_apparition', name: 'Ancient Apparition', localized_name: 'Ancient Apparition' },
+  { id: 'doom_bringer', name: 'Doom', localized_name: 'Doom' },
+  { id: 'ursa', name: 'Ursa', localized_name: 'Ursa' },
+  { id: 'spirit_breaker', name: 'Spirit Breaker', localized_name: 'Spirit Breaker' },
+  { id: 'gyrocopter', name: 'Gyrocopter', localized_name: 'Gyrocopter' },
+  { id: 'alchemist', name: 'Alchemist', localized_name: 'Alchemist' },
+  { id: 'invoker', name: 'Invoker', localized_name: 'Invoker' },
+  { id: 'silencer', name: 'Silencer', localized_name: 'Silencer' },
+  { id: 'obsidian_destroyer', name: 'Outworld Devourer', localized_name: 'Outworld Devourer' },
+  { id: 'lycan', name: 'Lycan', localized_name: 'Lycan' },
+  { id: 'brewmaster', name: 'Brewmaster', localized_name: 'Brewmaster' },
+  { id: 'shadow_demon', name: 'Shadow Demon', localized_name: 'Shadow Demon' },
+  { id: 'lone_druid', name: 'Lone Druid', localized_name: 'Lone Druid' },
+  { id: 'chaos_knight', name: 'Chaos Knight', localized_name: 'Chaos Knight' },
+  { id: 'meepo', name: 'Meepo', localized_name: 'Meepo' },
+  { id: 'treant', name: 'Treant Protector', localized_name: 'Treant Protector' },
+  { id: 'ogre_magi', name: 'Ogre Magi', localized_name: 'Ogre Magi' },
+  { id: 'undying', name: 'Undying', localized_name: 'Undying' },
+  { id: 'rubick', name: 'Rubick', localized_name: 'Rubick' },
+  { id: 'disruptor', name: 'Disruptor', localized_name: 'Disruptor' },
+  { id: 'nyx_assassin', name: 'Nyx Assassin', localized_name: 'Nyx Assassin' },
+  { id: 'naga_siren', name: 'Naga Siren', localized_name: 'Naga Siren' },
+  { id: 'keeper_of_the_light', name: 'Keeper of the Light', localized_name: 'Keeper of the Light' },
+  { id: 'wisp', name: 'Io', localized_name: 'Io' },
+  { id: 'visage', name: 'Visage', localized_name: 'Visage' },
+  { id: 'slark', name: 'Slark', localized_name: 'Slark' },
+  { id: 'medusa', name: 'Medusa', localized_name: 'Medusa' },
+  { id: 'troll_warlord', name: 'Troll Warlord', localized_name: 'Troll Warlord' },
+  { id: 'centaur', name: 'Centaur Warrunner', localized_name: 'Centaur Warrunner' },
+  { id: 'magnataur', name: 'Magnus', localized_name: 'Magnus' },
+  { id: 'shredder', name: 'Timbersaw', localized_name: 'Timbersaw' },
+  { id: 'bristleback', name: 'Bristleback', localized_name: 'Bristleback' },
+  { id: 'tusk', name: 'Tusk', localized_name: 'Tusk' },
+  { id: 'skywrath_mage', name: 'Skywrath Mage', localized_name: 'Skywrath Mage' },
+  { id: 'abaddon', name: 'Abaddon', localized_name: 'Abaddon' },
+  { id: 'elder_titan', name: 'Elder Titan', localized_name: 'Elder Titan' },
+  { id: 'legion_commander', name: 'Legion Commander', localized_name: 'Legion Commander' },
+  { id: 'techies', name: 'Techies', localized_name: 'Techies' },
+  { id: 'ember_spirit', name: 'Ember Spirit', localized_name: 'Ember Spirit' },
+  { id: 'earth_spirit', name: 'Earth Spirit', localized_name: 'Earth Spirit' },
+  { id: 'abyssal_underlord', name: 'Underlord', localized_name: 'Underlord' },
+  { id: 'terrorblade', name: 'Terrorblade', localized_name: 'Terrorblade' },
+  { id: 'phoenix', name: 'Phoenix', localized_name: 'Phoenix' },
+  { id: 'oracle', name: 'Oracle', localized_name: 'Oracle' },
+  { id: 'winter_wyvern', name: 'Winter Wyvern', localized_name: 'Winter Wyvern' },
+  { id: 'arc_warden', name: 'Arc Warden', localized_name: 'Arc Warden' },
+  { id: 'monkey_king', name: 'Monkey King', localized_name: 'Monkey King' },
+  { id: 'dark_willow', name: 'Dark Willow', localized_name: 'Dark Willow' },
+  { id: 'pangolier', name: 'Pangolier', localized_name: 'Pangolier' },
+  { id: 'grimstroke', name: 'Grimstroke', localized_name: 'Grimstroke' },
+  { id: 'hoodwink', name: 'Hoodwink', localized_name: 'Hoodwink' },
+  { id: 'void_spirit', name: 'Void Spirit', localized_name: 'Void Spirit' },
+  { id: 'snapfire', name: 'Snapfire', localized_name: 'Snapfire' },
+  { id: 'mars', name: 'Mars', localized_name: 'Mars' },
+  { id: 'dawnbreaker', name: 'Dawnbreaker', localized_name: 'Dawnbreaker' },
+  { id: 'marci', name: 'Marci', localized_name: 'Marci' },
+  { id: 'primal_beast', name: 'Primal Beast', localized_name: 'Primal Beast' },
+  { id: 'muerta', name: 'Muerta', localized_name: 'Muerta' },
+  { id: 'ringmaster', name: 'Ringmaster', localized_name: 'Ringmaster' }
+];
+
 const state = {
   data: { matchId: "", rating: 0, slides: [] },
   slideIndex: 0,
@@ -36,13 +165,14 @@ const notesList = $("#notesList");
 const noteInput = $("#noteInput");
 const addNoteBtn = $("#addNoteBtn");
 const clearNotesBtn = $("#clearNotesBtn");
-// slide-level hero removed; match-level hero is `matchHeroInput`
+// slide-level hero removed; match-level hero is `matchHeroSelect`
 const emptyState = $("#emptyState");
 const emptyAddBtn = $("#emptyAddBtn");
 const filmstrip = $("#filmstrip");
 const toastContainer = $("#toastContainer");
 const showWelcomeBtn = $("#showWelcomeBtn");
-const matchHeroInput = $("#matchHeroInput");
+const matchHeroSelect = $("#matchHeroSelect");
+const matchHeroPortrait = $("#matchHeroPortrait");
 
 const ghOwner = $("#ghOwner");
 const ghRepo = $("#ghRepo");
@@ -185,11 +315,44 @@ function saveLocal(){
   try{ localStorage.setItem(state.autosaveKey, JSON.stringify(state.data)); }catch{}
 }
 
+// Populate hero dropdown
+function populateHeroDropdown(){
+  if(!matchHeroSelect) return;
+  matchHeroSelect.innerHTML = '<option value="">Select hero...</option>';
+  DOTA_HEROES.forEach(hero => {
+    const option = document.createElement('option');
+    option.value = hero.id;
+    option.textContent = hero.localized_name;
+    matchHeroSelect.appendChild(option);
+  });
+}
+
+function updateHeroPortrait(){
+  if(!matchHeroPortrait) return;
+  const heroId = state.data.hero;
+  if(heroId){
+    const hero = DOTA_HEROES.find(h => h.id === heroId);
+    if(hero){
+      matchHeroPortrait.innerHTML = `<img src="https://cdn.cloudflare.steamstatic.com/apps/dota2/images/heroes/${heroId}_icon.png" alt="${hero.localized_name}" title="${hero.localized_name}">`;
+      matchHeroPortrait.style.display = '';
+    } else {
+      matchHeroPortrait.style.display = 'none';
+    }
+  } else {
+    matchHeroPortrait.style.display = 'none';
+  }
+}
+
 function renderAll(){
   matchIdInput.value = state.data.matchId || "";
   ratingInput.value = String(state.data.rating || 0);
   // match-level hero
-  if(matchHeroInput){ matchHeroInput.value = state.data.hero || ""; matchHeroInput.disabled = !state.edit; }
+  if(matchHeroSelect){
+    populateHeroDropdown();
+    matchHeroSelect.value = state.data.hero || "";
+    matchHeroSelect.disabled = !state.edit;
+  }
+  updateHeroPortrait();
   ratingValue.textContent = String(state.data.rating || 0);
   renderSlide();
   renderFilmstrip();
@@ -215,13 +378,11 @@ function renderSlide(){
     imageEl.src = "";
     notesList.innerHTML = "";
     pasteHint.style.display = state.edit ? "flex" : "none";
-    if(matchHeroInput){ matchHeroInput.value = state.data.hero || ""; matchHeroInput.disabled = !state.edit; }
     return;
   }
   const cur = state.data.slides[state.slideIndex];
   imageEl.src = cur.image || "";
   pasteHint.style.display = (state.edit && !cur.image) ? "flex" : "none";
-  if(matchHeroInput){ matchHeroInput.value = state.data.hero || ""; matchHeroInput.disabled = !state.edit; }
   notesList.innerHTML = "";
   for(let i = 0; i < (cur.notes || []).length; i++){
     const note = cur.notes[i];
@@ -695,6 +856,7 @@ matchIdInput.addEventListener("keydown", (e) => { if(e.key === "Enter"){ if(stat
 matchIdInput.addEventListener("change", () => { if(state.edit){ renameMatchId(matchIdInput.value); } });
 editToggle.addEventListener("change", onEditToggleChange);
 ratingInput.addEventListener("input", () => { state.data.rating = Number(ratingInput.value); ratingValue.textContent = ratingInput.value; saveLocal(); });
+matchHeroSelect?.addEventListener("change", () => { state.data.hero = matchHeroSelect.value; updateHeroPortrait(); saveLocal(); });
 addSlideBtn.addEventListener("click", addEmptySlide);
 deleteSlideBtn.addEventListener("click", deleteCurrentSlide);
 exportBtn.addEventListener("click", exportJSON);

@@ -8,7 +8,9 @@
 .brand-title{font-family:Cinzel,serif;font-weight:800;letter-spacing:.5px;margin:0;font-size:20px}
 .match-controls{display:flex;align-items:center;gap:8px}
 .match-hero{display:flex;align-items:center;gap:8px;margin-left:12px}
-.match-hero-input{height:36px;padding:0 12px;background:var(--panel);border:1px solid var(--border);border-radius:10px;color:var(--text);min-width:160px}
+.match-hero-select{height:36px;padding:0 12px;background:var(--panel);border:1px solid var(--border);border-radius:10px;color:var(--text);min-width:160px;max-width:200px}
+.match-hero-portrait{display:flex;align-items:center;margin-left:8px}
+.match-hero-portrait img{width:32px;height:32px;border-radius:6px;border:1px solid var(--border)}
 .match-input{height:36px;padding:0 12px;background:var(--panel);border:1px solid var(--border);border-radius:10px;color:var(--text);outline:none;min-width:170px}
 .btn{height:36px;padding:0 14px;border-radius:10px;border:1px solid var(--border);background:var(--panel);color:var(--text);cursor:pointer;box-shadow:none} .btn:hover{border-color:#2b323c}
 .btn.primary{background:linear-gradient(180deg,#cf2e2e,#a01c1c);border-color:#a01c1c}
