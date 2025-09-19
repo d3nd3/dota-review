@@ -23,6 +23,10 @@
             <button id="loadBtn" class="btn primary">Load</button>
             <button id="newBtn" class="btn subtle" title="Start a new match">New</button>
         </div>
+        <div class="match-hero">
+            <label for="matchHeroInput" class="vis">Match hero</label>
+            <input id="matchHeroInput" class="match-hero-input" type="text" placeholder="Match hero (global)" autocomplete="off">
+        </div>
         <div class="spacer"></div>
         <div class="mode-controls">
             <label class="switch">
@@ -104,7 +108,8 @@
     <dialog id="welcomeDialog" class="dialog welcome">
         <form method="dialog">
             <h2>Welcome to Dota Review</h2>
-            <p>Paste Dota screenshots, add notes per slide, score the performance, and publish JSON to GitHub.</p>
+            <p>Choose a published match or start a new review. Published matches are read from <code>data/index.json</code> when available.</p>
+            <div id="publishedList" class="published-list"></div>
             <div class="welcome-actions">
                 <button id="welcomeSampleBtn" class="btn">Try sample</button>
                 <button id="welcomeNewBtn" class="btn primary">Start new</button>

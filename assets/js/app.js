@@ -41,6 +41,7 @@ const emptyAddBtn = $("#emptyAddBtn");
 const filmstrip = $("#filmstrip");
 const toastContainer = $("#toastContainer");
 const showWelcomeBtn = $("#showWelcomeBtn");
+const matchHeroInput = $("#matchHeroInput");
 
 const ghOwner = $("#ghOwner");
 const ghRepo = $("#ghRepo");
@@ -105,6 +106,8 @@ function saveLocal(){
 function renderAll(){
   matchIdInput.value = state.data.matchId || "";
   ratingInput.value = String(state.data.rating || 0);
+  // match-level hero
+  if(matchHeroInput){ matchHeroInput.value = state.data.hero || ""; matchHeroInput.disabled = !state.edit; }
   ratingValue.textContent = String(state.data.rating || 0);
   renderSlide();
   renderFilmstrip();
@@ -389,6 +392,16 @@ function renameMatchId(newId){
   renderAll();
 }
 
+// Load published matches list for welcome
+async function loadPublished(){
+  try{
+    const res = await fetch("./data/index.json", { cache: "no-store" });
+    if(!res.ok) return [];
+    const j = await res.json();
+    return j.published || [];
+  }catch{return []}
+}
+
 // Wire up
 loadBtn.addEventListener("click", () => loadMatch());
 newBtn.addEventListener("click", () => { newMatch(""); /* edit remains gated */ });
@@ -431,7 +444,26 @@ else {
 welcomeSampleBtn?.addEventListener("click", (e) => { e.preventDefault(); try{ localStorage.setItem("dota-review:welcomed", "1"); }catch{}; welcomeDialog?.close(); loadMatch("sample"); });
 welcomeNewBtn?.addEventListener("click", (e) => { e.preventDefault(); try{ localStorage.setItem("dota-review:welcomed", "1"); }catch{}; welcomeDialog?.close(); newMatch(""); });
 
-showWelcomeBtn?.addEventListener("click", () => { try{ welcomeDialog.showModal(); }catch{} });
+showWelcomeBtn?.addEventListener("click", async () => {
+  try{
+    const list = await loadPublished();
+    const node = document.getElementById('publishedList');
+    node.innerHTML = '';
+    if(list.length === 0){ node.innerHTML = '<div class="empty-published">No published matches</div>'; }
+    for(const p of list){
+      const item = document.createElement('div'); item.className = 'published-item';
+      const img = document.createElement('img'); img.src = p.image || ''; img.className = 'pub-thumb';
+      const meta = document.createElement('div'); meta.className = 'pub-meta';
+      const title = document.createElement('div'); title.className = 'pub-title'; title.textContent = p.matchId;
+      const sub = document.createElement('div'); sub.className = 'pub-sub'; sub.textContent = `${p.hero || ''} • ${p.ts ? new Date(p.ts).toLocaleString() : ''}`;
+      meta.appendChild(title); meta.appendChild(sub);
+      item.appendChild(img); item.appendChild(meta);
+      item.addEventListener('click', () => { try{ localStorage.setItem('dota-review:welcomed','1'); }catch{}; welcomeDialog?.close(); loadMatch(p.matchId); });
+      node.appendChild(item);
+    }
+    welcomeDialog.showModal();
+  }catch{}
+});
 
 // Start with edit disabled until verification
 updateVerifyUi();
