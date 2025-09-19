@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Page Not Found - Dota Review</title>
+  <script>
+    // GitHub Pages SPA redirect that works for project pages (relative base)
+    (function(){
+      var l = window.location;
+      var base = new URL('.', l.href).pathname; // e.g., /repo/
+      var path = l.pathname.indexOf(base) === 0 ? l.pathname.slice(base.length) : l.pathname.replace(/^\//,'');
+      var q = l.search || '';
+      var h = l.hash || '';
+      l.replace('./#' + path + q + h);
+    })();
+  </script>
+</head>
+<body></body>
+</html>
+
+

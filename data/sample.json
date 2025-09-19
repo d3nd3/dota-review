@@ -1,0 +1,16 @@
+{
+  "matchId": "sample",
+  "rating": 7,
+  "slides": [
+    {
+      "image": "https://raw.githubusercontent.com/ValveSoftware/Dota2Media/master/logos/dota2_logo_color.jpg",
+      "notes": ["Rotate to rune earlier.", "Stack small camp at 2:00."]
+    },
+    {
+      "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/31/Dota_2_Logo.svg/512px-Dota_2_Logo.svg.png",
+      "notes": ["Smoke timing after first item.", "Place deep ward before push."]
+    }
+  ]
+}
+
+
