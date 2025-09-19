@@ -244,8 +244,14 @@ function renderSlide(){
       sentiment.title = noteSentiment || '';
 
       // when clicking the note text, mark this note as selected so the input radios reflect it
-      t.addEventListener('focus', () => { state.selectedNoteIndex = i; syncNoteSentimentToControls(i); });
-      t.addEventListener('click', () => { state.selectedNoteIndex = i; syncNoteSentimentToControls(i); });
+      t.addEventListener('focus', () => {
+        state.selectedNoteIndex = i;
+        syncNoteSentimentToControls(i);
+      });
+      t.addEventListener('click', () => {
+        state.selectedNoteIndex = i;
+        syncNoteSentimentToControls(i);
+      });
 
       sentiment.addEventListener('click', () => {
         if(!state.edit) return; // only interactive in edit mode
@@ -282,7 +288,14 @@ function renderSlide(){
     notesList.appendChild(li);
   }
   // keep input radios in sync with selected note (if any)
-  if(state.selectedNoteIndex !== null && state.selectedNoteIndex !== undefined){ syncNoteSentimentToControls(state.selectedNoteIndex); }
+  if(state.selectedNoteIndex !== null && state.selectedNoteIndex !== undefined){
+    // Validate that the selected note still exists
+    if(state.selectedNoteIndex >= (cur.notes || []).length){
+      state.selectedNoteIndex = null;
+    } else {
+      syncNoteSentimentToControls(state.selectedNoteIndex);
+    }
+  }
 }
 
 // Focus the editable text element for a given note index (if present)
@@ -384,6 +397,10 @@ function syncNoteSentimentToControls(index){
     else if(note && typeof note === 'object') s = note.sentiment || '';
     const sel = document.querySelectorAll('input[name="noteSentiment"]');
     sel.forEach(r => { r.checked = (r.value === s); });
+    // Clear any previous selected note when syncing
+    if(state.selectedNoteIndex !== index){
+      state.selectedNoteIndex = index;
+    }
   }catch{}
 }
 
@@ -412,6 +429,11 @@ function wireNoteSentimentControls(){
           const bullet = li.querySelector('.bullet');
           if(sentEl) sentEl.textContent = val === 'positive' ? '👍' : (val === 'negative' ? '👎' : (val === 'neutral' ? '🟡' : ''));
           if(bullet) bullet.className = 'bullet ' + (val || '');
+          // Keep focus on the note text element
+          const textEl = li.querySelector('.text');
+          if(textEl && document.activeElement !== textEl){
+            textEl.focus();
+          }
         }
       }catch(e){}
     });
@@ -690,6 +712,21 @@ emptyAddBtn.addEventListener("click", addEmptySlide);
 setupDragDrop();
 // wire note sentiment control handler
 wireNoteSentimentControls();
+
+// Clear selected note index when clicking outside of notes
+document.addEventListener('click', (ev) => {
+  if(!state.edit) return;
+  const target = ev.target;
+  // If clicked outside of notes list, clear selection
+  if(!notesList.contains(target)){
+    state.selectedNoteIndex = null;
+    // Reset radio controls to unchecked
+    try{
+      const sel = document.querySelectorAll('input[name="noteSentiment"]');
+      sel.forEach(r => { r.checked = false; });
+    }catch{}
+  }
+});
 
 // Load saved GH credentials on startup
 loadSavedCredentials();
