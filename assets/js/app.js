@@ -1,5 +1,5 @@
 // Dota Review App - static, GitHub Pages friendly
-// Data shape: { matchId: string, rating: number, slides: [{ image: string(base64 or url), notes: string[] }] }
+// Data shape: { matchId: string, rating: number, slides: [{ image: string(base64 or url), notes: string[], hero?: string }] }
 
 const state = {
   data: { matchId: "", rating: 0, slides: [] },
@@ -35,6 +35,7 @@ const notesList = $("#notesList");
 const noteInput = $("#noteInput");
 const addNoteBtn = $("#addNoteBtn");
 const clearNotesBtn = $("#clearNotesBtn");
+const heroInput = $("#heroInput");
 const emptyState = $("#emptyState");
 const emptyAddBtn = $("#emptyAddBtn");
 const filmstrip = $("#filmstrip");
@@ -120,14 +121,16 @@ function renderSlide(){
   const slide = currentSlide();
   if(!slide){
     imageEl.src = "";
-    emptyState.hidden = false;
+    // Show empty state only when no slides at all
+    emptyState.hidden = state.data.slides.length !== 0;
     notesList.innerHTML = "";
     pasteHint.style.display = state.edit ? "flex" : "none";
     return;
   }
-  emptyState.hidden = true;
+  emptyState.hidden = state.data.slides.length === 0 ? false : true;
   imageEl.src = slide.image || "";
   pasteHint.style.display = (state.edit && !slide.image) ? "flex" : "none";
+  if(heroInput){ heroInput.value = slide.hero || ""; heroInput.disabled = !state.edit; }
   notesList.innerHTML = "";
   for(const note of slide.notes || []){
     const li = document.createElement("li");
@@ -146,6 +149,7 @@ function renderFilmstrip(){
     const th = document.createElement("div"); th.className = "thumb" + (i===state.slideIndex ? " active" : "");
     const img = document.createElement("img"); img.src = s.image || "";
     const idx = document.createElement("div"); idx.className = "index"; idx.textContent = String(i+1);
+    if(s.hero){ idx.title = s.hero; }
     th.appendChild(img); th.appendChild(idx);
     th.addEventListener("click", () => { state.slideIndex = i; renderSlide(); renderFilmstrip(); });
     filmstrip.appendChild(th);
@@ -166,13 +170,13 @@ function updateTitle(){
 }
 
 function addSlideFromImage(src){
-  state.data.slides.push({ image: src, notes: [] });
+  state.data.slides.push({ image: src, notes: [], hero: heroInput?.value?.trim() || "" });
   state.slideIndex = state.data.slides.length - 1;
   renderAll();
 }
 
 function addEmptySlide(){
-  state.data.slides.push({ image: "", notes: [] });
+  state.data.slides.push({ image: "", notes: [], hero: heroInput?.value?.trim() || "" });
   state.slideIndex = state.data.slides.length - 1;
   renderAll();
 }
@@ -402,6 +406,7 @@ document.addEventListener("keydown", onKey);
 document.addEventListener("paste", handlePaste);
 noteInput.addEventListener("keydown", (e) => { if(e.key === "Enter"){ e.preventDefault(); addNote(); }});
 addNoteBtn.addEventListener("click", addNote);
+heroInput?.addEventListener("input", () => { const s = currentSlide(); if(!s) return; s.hero = heroInput.value; saveLocal(); });
 clearNotesBtn.addEventListener("click", () => { const s = currentSlide(); if(!s) return; s.notes = []; renderSlide(); saveLocal(); });
 navPrev.addEventListener("click", () => nav(-1));
 navNext.addEventListener("click", () => nav(1));
