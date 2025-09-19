@@ -717,8 +717,9 @@ wireNoteSentimentControls();
 document.addEventListener('click', (ev) => {
   if(!state.edit) return;
   const target = ev.target;
-  // If clicked outside of notes list, clear selection
-  if(!notesList.contains(target)){
+  // If clicked outside of notes list and sentiment controls, clear selection
+  const sentimentControls = document.querySelector('.sentiment-controls');
+  if(!notesList.contains(target) && (!sentimentControls || !sentimentControls.contains(target))){
     state.selectedNoteIndex = null;
     // Reset radio controls to unchecked
     try{
