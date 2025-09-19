@@ -230,9 +230,9 @@ function renderSlide(){
     const sentiment = document.createElement('div'); sentiment.className = 'sentiment';
     // note may be stored as either string or {text, sentiment}
     let noteText = '';
-    let noteSentiment = '';
-    if(typeof note === 'string') { noteText = note; }
-    else if(note && typeof note === 'object'){ noteText = note.text || ''; noteSentiment = note.sentiment || ''; }
+    let noteSentiment = 'neutral'; // default to neutral
+    if(typeof note === 'string') { noteText = note; noteSentiment = 'neutral'; }
+    else if(note && typeof note === 'object'){ noteText = note.text || ''; noteSentiment = note.sentiment || 'neutral'; }
     const t = document.createElement("div"); t.className = "text";
     if(state.edit){
       t.contentEditable = true;
@@ -262,7 +262,7 @@ function renderSlide(){
         b.className = 'bullet ' + (noteSentiment || '');
         sentiment.title = noteSentiment || '';
         // persist back
-        cur.notes[i] = noteSentiment ? { text: String(t.textContent || '').trim(), sentiment: noteSentiment } : String(t.textContent || '').trim();
+        cur.notes[i] = { text: String(t.textContent || '').trim(), sentiment: noteSentiment };
         saveLocal();
         // keep controls in sync
         state.selectedNoteIndex = i; syncNoteSentimentToControls(i);
@@ -270,7 +270,7 @@ function renderSlide(){
       // save on blur
       t.addEventListener("blur", (ev) => {
         const v = String(ev.target.textContent || "").trim();
-        cur.notes[i] = noteSentiment ? { text: v, sentiment: noteSentiment } : v;
+        cur.notes[i] = { text: v, sentiment: noteSentiment };
         saveLocal();
       });
       // Save on Enter and prevent newline
@@ -279,8 +279,8 @@ function renderSlide(){
       });
     } else {
       // show sentiment when not editing
-      if(typeof note === 'string'){ t.textContent = note; }
-      else { t.textContent = note.text || ''; sentiment.textContent = note.sentiment === 'positive' ? '👍' : (note.sentiment === 'negative' ? '👎' : (note.sentiment === 'neutral' ? '🟡' : '')); b.className = 'bullet ' + (note.sentiment || ''); }
+      if(typeof note === 'string'){ t.textContent = note; sentiment.textContent = '🟡'; b.className = 'bullet neutral'; }
+      else { t.textContent = note.text || ''; sentiment.textContent = note.sentiment === 'positive' ? '👍' : (note.sentiment === 'negative' ? '👎' : (note.sentiment === 'neutral' ? '🟡' : '🟡')); b.className = 'bullet ' + (note.sentiment || 'neutral'); }
     }
     const del = document.createElement("button"); del.className = "del"; del.textContent = "×";
     del.addEventListener("click", () => { removeNoteAt(i); });
@@ -372,15 +372,15 @@ function deleteCurrentSlide(){
 function addNote(){
   let val = (noteInput.value || "").trim();
   if(!val) return;
-  // Determine sentiment from radio controls if present
-  let sentiment = '';
+  // Determine sentiment from radio controls, default to neutral
+  let sentiment = 'neutral';
   try{
     const sel = document.querySelector('input[name="noteSentiment"]:checked');
     if(sel) sentiment = sel.value;
   }catch{}
   const slide = currentSlide();
   if(!slide){ return; }
-  slide.notes.push(sentiment ? { text: val, sentiment } : val);
+  slide.notes.push({ text: val, sentiment });
   noteInput.value = "";
   renderSlide();
   saveLocal();
@@ -722,10 +722,10 @@ document.addEventListener('click', (ev) => {
   const sentimentControls = document.querySelector('.sentiment-controls');
   if(!notesList.contains(target) && (!sentimentControls || !sentimentControls.contains(target)) && target !== noteInput){
     state.selectedNoteIndex = null;
-    // Reset radio controls to unchecked
+    // Reset radio controls to neutral (default)
     try{
       const sel = document.querySelectorAll('input[name="noteSentiment"]');
-      sel.forEach(r => { r.checked = false; });
+      sel.forEach(r => { r.checked = (r.value === 'neutral'); });
     }catch{}
   }
 });
