@@ -35,7 +35,7 @@ const notesList = $("#notesList");
 const noteInput = $("#noteInput");
 const addNoteBtn = $("#addNoteBtn");
 const clearNotesBtn = $("#clearNotesBtn");
-const heroInput = $("#heroInput");
+// slide-level hero removed; match-level hero is `matchHeroInput`
 const emptyState = $("#emptyState");
 const emptyAddBtn = $("#emptyAddBtn");
 const filmstrip = $("#filmstrip");
@@ -129,7 +129,7 @@ function renderSlide(){
     imageEl.src = "";
     notesList.innerHTML = "";
     pasteHint.style.display = state.edit ? "flex" : "none";
-    if(heroInput){ heroInput.value = state.data.hero || ""; heroInput.disabled = !state.edit; }
+    if(matchHeroInput){ matchHeroInput.value = state.data.hero || ""; matchHeroInput.disabled = !state.edit; }
     return;
   }
   const cur = state.data.slides[state.slideIndex];
@@ -137,12 +137,30 @@ function renderSlide(){
   pasteHint.style.display = (state.edit && !cur.image) ? "flex" : "none";
   if(matchHeroInput){ matchHeroInput.value = state.data.hero || ""; matchHeroInput.disabled = !state.edit; }
   notesList.innerHTML = "";
-  for(const note of cur.notes || []){
+  for(let i = 0; i < (cur.notes || []).length; i++){
+    const note = cur.notes[i];
     const li = document.createElement("li");
     const b = document.createElement("div"); b.className = "bullet"; b.textContent = "•";
-    const t = document.createElement("div"); t.className = "text"; t.textContent = note;
+    const t = document.createElement("div"); t.className = "text";
+    if(state.edit){
+      t.contentEditable = true;
+      t.spellcheck = false;
+      t.textContent = note;
+      // save on blur
+      t.addEventListener("blur", (ev) => {
+        const v = String(ev.target.textContent || "").trim();
+        cur.notes[i] = v;
+        saveLocal();
+      });
+      // Save on Enter and prevent newline
+      t.addEventListener("keydown", (ev) => {
+        if(ev.key === "Enter"){ ev.preventDefault(); t.blur(); }
+      });
+    } else {
+      t.textContent = note;
+    }
     const del = document.createElement("button"); del.className = "del"; del.textContent = "×";
-    del.addEventListener("click", () => { removeNote(note); });
+    del.addEventListener("click", () => { removeNoteAt(i); });
     li.appendChild(b); li.appendChild(t); li.appendChild(del);
     notesList.appendChild(li);
   }
@@ -205,10 +223,11 @@ function addNote(){
   saveLocal();
 }
 
-function removeNote(text){
+function removeNoteAt(index){
   const slide = currentSlide();
   if(!slide) return;
-  slide.notes = (slide.notes || []).filter(n => n !== text);
+  if(index < 0 || index >= (slide.notes || []).length) return;
+  slide.notes.splice(index, 1);
   renderSlide();
   saveLocal();
 }
