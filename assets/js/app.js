@@ -204,7 +204,11 @@ function currentSlide(){
 function renderSlide(){
   const slide = currentSlide();
   // Show empty state only when there are absolutely no slides for this match
-  emptyState.hidden = !!(state.data.slides && state.data.slides.length > 0);
+  try{
+    const hasSlides = !!(state.data.slides && state.data.slides.length > 0);
+    // use style.display instead of hidden attribute to avoid CSS specificity hiding
+    emptyState.style.display = hasSlides ? 'none' : '';
+  }catch{}
   const slideExists = !!(state.data.slides && state.data.slides.length > 0 && state.data.slides[state.slideIndex]);
   if(!slideExists){
     imageEl.src = "";
