@@ -363,6 +363,24 @@ async function loadMatch(matchId){
           showToast("Loaded match with compressed data. Images may be missing.", "info");
         } catch(compressErr) {
           console.warn("Failed to parse compressed data:", compressErr);
+          // Try minimal version as fallback
+          const minimal = localStorage.getItem(`dota-review:${id}:minimal`);
+          if(minimal){
+            try {
+              const minimalData = JSON.parse(minimal);
+              state.data = {
+                matchId: minimalData.matchId,
+                rating: minimalData.rating,
+                hero: minimalData.hero,
+                slides: [] // No slides in minimal format
+              };
+              loaded = true;
+              console.log("Loaded minimal data from localStorage");
+              showToast("Loaded match with minimal data. Full data may be missing.", "warning");
+            } catch(minimalErr) {
+              console.warn("Failed to parse minimal data:", minimalErr);
+            }
+          }
         }
       }
     }
@@ -546,10 +564,28 @@ function saveLocal(){
         };
         const compressedString = JSON.stringify(compressedData);
 
-        // Only save if it's significantly smaller
-        if(compressedString.length < dataString.length * 0.5){
-          localStorage.setItem(`${state.autosaveKey}:compressed`, compressedString);
-          console.log("Saved compressed version to localStorage");
+        // More aggressive compression - save even if not significantly smaller
+        if(compressedString.length < dataString.length){
+          try {
+            localStorage.setItem(`${state.autosaveKey}:compressed`, compressedString);
+            console.log("Saved compressed version to localStorage");
+          } catch(compressQuotaErr) {
+            // If even compressed data is too big, try ultra-minimal version
+            console.warn("Compressed data still too large, trying ultra-minimal version");
+            const ultraMinimalData = {
+              matchId: state.data.matchId,
+              rating: state.data.rating,
+              hero: state.data.hero,
+              slideCount: state.data.slides?.length || 0
+            };
+            const ultraMinimalString = JSON.stringify(ultraMinimalData);
+            try {
+              localStorage.setItem(`${state.autosaveKey}:minimal`, ultraMinimalString);
+              console.log("Saved ultra-minimal version to localStorage");
+            } catch(ultraErr) {
+              console.warn("Even ultra-minimal data couldn't be saved:", ultraErr.message);
+            }
+          }
         }
       }catch(compressErr){
         console.warn("Failed to save even compressed data:", compressErr.message);
