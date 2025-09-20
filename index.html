@@ -19,7 +19,9 @@
             <h1 class="brand-title">Dota Review</h1>
         </div>
         <div class="match-controls">
-            <input id="matchIdInput" class="match-input" type="text" placeholder="Match ID" inputmode="numeric" autocomplete="off">
+            <input id="matchIdInput" class="match-input" type="text" placeholder="Match ID" inputmode="numeric" autocomplete="off" readonly>
+            <button id="editMatchIdBtn" class="btn subtle" title="Edit match ID" style="display: none;">Edit Match ID</button>
+            <button id="saveMatchIdBtn" class="btn primary" title="Save match ID" style="display: none;">Save</button>
             <button id="loadBtn" class="btn primary">Load</button>
             <button id="newBtn" class="btn subtle" title="Start a new match">New</button>
         </div>

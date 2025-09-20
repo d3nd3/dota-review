@@ -143,6 +143,8 @@ const state = {
 // Elements
 const $ = (sel) => document.querySelector(sel);
 const matchIdInput = $("#matchIdInput");
+const editMatchIdBtn = $("#editMatchIdBtn");
+const saveMatchIdBtn = $("#saveMatchIdBtn");
 const loadBtn = $("#loadBtn");
 const newBtn = $("#newBtn");
 const editToggle = $("#editToggle");
@@ -276,8 +278,32 @@ function setControlsEnabled(enabled){
   noteInput.disabled = !enabled;
   addNoteBtn.disabled = !enabled;
   clearNotesBtn.disabled = !enabled;
-  addSlideBtn.disabled = !enabled;
-  deleteSlideBtn.disabled = !enabled;
+  if(matchHeroSelect) matchHeroSelect.disabled = !enabled;
+
+  // Hide/show buttons based on edit mode
+  if(enabled){
+    // In edit mode: hide Add Slide, Delete Slide, and Publish to GitHub
+    addSlideBtn.style.display = 'none';
+    deleteSlideBtn.style.display = 'none';
+    const githubPanel = $("#githubPanel");
+    if(githubPanel) githubPanel.style.display = 'none';
+
+    // Show Edit Match ID button
+    if(editMatchIdBtn) editMatchIdBtn.style.display = 'inline-block';
+  } else {
+    // Not in edit mode: show all buttons, hide edit/save match ID buttons
+    addSlideBtn.style.display = 'inline-block';
+    deleteSlideBtn.style.display = 'inline-block';
+    const githubPanel = $("#githubPanel");
+    if(githubPanel) githubPanel.style.display = 'inline-block';
+
+    // Hide edit and save buttons
+    if(editMatchIdBtn) editMatchIdBtn.style.display = 'none';
+    if(saveMatchIdBtn) saveMatchIdBtn.style.display = 'none';
+
+    // Make match ID readonly
+    if(matchIdInput) matchIdInput.readOnly = true;
+  }
 }
 
 function updateAutosaveKey(){
@@ -371,6 +397,13 @@ function updateHeroPortrait(){
 
 function renderAll(){
   matchIdInput.value = state.data.matchId || "";
+  // Set readonly based on edit mode and whether we're currently editing
+  if(!state.edit){
+    matchIdInput.readOnly = true;
+  } else if(state.edit && saveMatchIdBtn.style.display === 'none'){
+    // If in edit mode but save button is not visible, make readonly
+    matchIdInput.readOnly = true;
+  }
   ratingInput.value = String(state.data.rating || 0);
   // match-level hero
   if(matchHeroSelect){
@@ -925,6 +958,28 @@ function renameMatchId(newId){
   renderAll();
 }
 
+function enableMatchIdEdit(){
+  if(!state.edit) return;
+  matchIdInput.readOnly = false;
+  matchIdInput.focus();
+  editMatchIdBtn.style.display = 'none';
+  saveMatchIdBtn.style.display = 'inline-block';
+}
+
+function saveMatchId(){
+  const newId = matchIdInput.value.trim();
+  if(newId){
+    renameMatchId(newId);
+    showToast("Match ID saved", "info");
+  } else {
+    showToast("Match ID cannot be empty", "error");
+    return;
+  }
+  matchIdInput.readOnly = true;
+  saveMatchIdBtn.style.display = 'none';
+  editMatchIdBtn.style.display = 'inline-block';
+}
+
 // Load published matches list for welcome
 async function loadPublished(){
   try{
@@ -997,8 +1052,23 @@ async function populatePublishedList(){
 // Wire up
 loadBtn.addEventListener("click", () => loadMatch());
 newBtn.addEventListener("click", () => { newMatch(""); /* edit remains gated */ });
-matchIdInput.addEventListener("keydown", (e) => { if(e.key === "Enter"){ if(state.edit){ e.preventDefault(); renameMatchId(matchIdInput.value); } else { loadMatch(); } } });
-matchIdInput.addEventListener("change", () => { if(state.edit){ renameMatchId(matchIdInput.value); } });
+editMatchIdBtn?.addEventListener("click", enableMatchIdEdit);
+saveMatchIdBtn?.addEventListener("click", saveMatchId);
+matchIdInput.addEventListener("keydown", (e) => {
+  if(e.key === "Enter"){
+    if(state.edit && !matchIdInput.readOnly){
+      e.preventDefault();
+      saveMatchId();
+    } else if(!state.edit){
+      loadMatch();
+    }
+  }
+});
+matchIdInput.addEventListener("change", () => {
+  if(state.edit && !matchIdInput.readOnly){
+    saveMatchId();
+  }
+});
 editToggle.addEventListener("change", onEditToggleChange);
 ratingInput.addEventListener("input", () => { state.data.rating = Number(ratingInput.value); ratingValue.textContent = ratingInput.value; saveLocal(); });
 matchHeroSelect?.addEventListener("change", () => { state.data.hero = matchHeroSelect.value; updateHeroPortrait(); saveLocal(); });
