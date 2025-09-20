@@ -282,20 +282,20 @@ function setControlsEnabled(enabled){
 
   // Hide/show buttons based on edit mode
   if(enabled){
-    // In edit mode: hide Add Slide, Delete Slide, and Publish to GitHub
-    addSlideBtn.style.display = 'none';
-    deleteSlideBtn.style.display = 'none';
-    const githubPanel = $("#githubPanel");
-    if(githubPanel) githubPanel.style.display = 'none';
-
-    // Show Edit Match ID button
-    if(editMatchIdBtn) editMatchIdBtn.style.display = 'inline-block';
-  } else {
-    // Not in edit mode: show all buttons, hide edit/save match ID buttons
+    // In edit mode: show Add Slide, Delete Slide, and Publish to GitHub
     addSlideBtn.style.display = 'inline-block';
     deleteSlideBtn.style.display = 'inline-block';
     const githubPanel = $("#githubPanel");
     if(githubPanel) githubPanel.style.display = 'inline-block';
+
+    // Show Edit Match ID button
+    if(editMatchIdBtn) editMatchIdBtn.style.display = 'inline-block';
+  } else {
+    // Not in edit mode: hide Add Slide, Delete Slide, and Publish to GitHub
+    addSlideBtn.style.display = 'none';
+    deleteSlideBtn.style.display = 'none';
+    const githubPanel = $("#githubPanel");
+    if(githubPanel) githubPanel.style.display = 'none';
 
     // Hide edit and save buttons
     if(editMatchIdBtn) editMatchIdBtn.style.display = 'none';
