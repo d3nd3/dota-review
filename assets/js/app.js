@@ -26,6 +26,7 @@ const DOTA_HEROES = [
   { id: 'windrunner', name: 'Windrunner', localized_name: 'Windrunner' },
   { id: 'zeus', name: 'Zeus', localized_name: 'Zeus' },
   { id: 'kunkka', name: 'Kunkka', localized_name: 'Kunkka' },
+  { id: 'kez', name: 'Kez', localized_name: 'Kez' },
   { id: 'lina', name: 'Lina', localized_name: 'Lina' },
   { id: 'lion', name: 'Lion', localized_name: 'Lion' },
   { id: 'shadow_shaman', name: 'Shadow Shaman', localized_name: 'Shadow Shaman' },
@@ -178,6 +179,9 @@ const ghOwner = $("#ghOwner");
 const ghRepo = $("#ghRepo");
 const ghBranch = $("#ghBranch");
 const ghToken = $("#ghToken");
+const publishProgress = $("#publishProgress");
+const progressFill = $("#progressFill");
+const progressText = $("#progressText");
 
 // Load saved GitHub credentials (owner/repo/branch/token) if present
 function loadSavedCredentials(){
@@ -298,9 +302,21 @@ async function loadMatch(matchId){
   if(!state.data || state.data.matchId !== id){
     // try to fetch from data/{id}.json
     try{
+      showToast("Loading match data...", "info");
       const res = await fetch(`./data/${encodeURIComponent(id)}.json`, { cache: "no-store" });
-      if(res.ok){ state.data = await res.json(); }
-    }catch{ /* ignore */ }
+      if(res.ok){
+        const jsonText = await res.text();
+        // Check if the response is extremely large (potential memory issue)
+        if(jsonText.length > 10 * 1024 * 1024) { // 10MB
+          showToast("Large file detected - this may take a moment to load", "info");
+        }
+        state.data = JSON.parse(jsonText);
+        showToast(`Loaded match with ${state.data.slides?.length || 0} slides`, "info");
+      }
+    }catch(err){
+      console.error("Error loading match:", err);
+      showToast("Failed to load match data", "error");
+    }
   }
   if(!state.data || state.data.matchId !== id){
     state.data = { matchId: id, rating: 0, slides: [] };
@@ -333,14 +349,17 @@ function updateHeroPortrait(){
   if(heroId){
     const hero = DOTA_HEROES.find(h => h.id === heroId);
     if(hero){
-      // Use Liquipedia icon URL format
-      // Note: The path generation may need adjustment for some heroes
-      // e.g., "Alchemist" -> "a/al/Alchemist_icon_dota2_gameasset.png"
-      const name = hero.localized_name.replace(/\s+/g, ''); // Remove spaces
-      const firstLetter = name.charAt(0).toLowerCase();
-      const firstTwo = name.substring(0, 2).toLowerCase();
-      const iconUrl = `https://liquipedia.net/commons/images/${firstLetter}/${firstTwo}/${name}_icon_dota2_gameasset.png`;
-      matchHeroPortrait.innerHTML = `<img src="${iconUrl}" alt="${hero.localized_name}" title="${hero.localized_name}">`;
+      // Use Steam CDN icon URL format
+      // Most heroes use {heroId}_icon.png format
+      let iconUrl = `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/heroes/${heroId}_icon.png`;
+
+      // Handle special cases where icon format might be different
+      if(heroId === 'kez'){
+        // Kez uses full image as fallback since icon might not be available
+        iconUrl = `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/heroes/${heroId}_full.png`;
+      }
+
+      matchHeroPortrait.innerHTML = `<img src="${iconUrl}" alt="${hero.localized_name}" title="${hero.localized_name}" onerror="this.src='https://cdn.cloudflare.steamstatic.com/apps/dota2/images/heroes/${heroId}_full.png'">`;
       matchHeroPortrait.style.display = '';
     } else {
       matchHeroPortrait.style.display = 'none';
@@ -388,7 +407,23 @@ function renderSlide(){
     return;
   }
   const cur = state.data.slides[state.slideIndex];
-  imageEl.src = cur.image || "";
+
+  // Add error handling for large images
+  const loadImage = () => {
+    try {
+      imageEl.src = cur.image || "";
+      imageEl.onerror = () => {
+        console.warn(`Failed to load slide ${state.slideIndex + 1} - possibly due to memory limits`);
+        imageEl.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300' viewBox='0 0 400 300'%3E%3Crect width='400' height='300' fill='%230e1216'/%3E%3Ctext x='200' y='140' text-anchor='middle' fill='%23cf2e2e' font-size='16'%3EImage too large to display%3C/text%3E%3Ctext x='200' y='165' text-anchor='middle' fill='%239aa7b2' font-size='12'%3EUse navigation arrows to view other slides%3C/text%3E%3C/svg%3E";
+        showToast("Slide image too large to display. Try navigating to other slides.", "error");
+      };
+    } catch (e) {
+      console.error("Error loading slide image:", e);
+      imageEl.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300' viewBox='0 0 400 300'%3E%3Crect width='400' height='300' fill='%230e1216'/%3E%3Ctext x='200' y='140' text-anchor='middle' fill='%23cf2e2e' font-size='16'%3EError loading image%3C/text%3E%3Ctext x='200' y='165' text-anchor='middle' fill='%239aa7b2' font-size='12'%3EPlease try refreshing the page%3C/text%3E%3C/svg%3E";
+    }
+  };
+
+  loadImage();
   pasteHint.style.display = (state.edit && !cur.image) ? "flex" : "none";
   notesList.innerHTML = "";
   for(let i = 0; i < (cur.notes || []).length; i++){
@@ -486,10 +521,38 @@ function renderFilmstrip(){
   filmstrip.innerHTML = "";
   state.data.slides.forEach((s, i) => {
     const th = document.createElement("div"); th.className = "thumb" + (i===state.slideIndex ? " active" : "");
-    const img = document.createElement("img"); img.src = s.image || "";
+    const img = document.createElement("img");
+
+    // Use lazy loading to prevent memory issues with large images
+    if (i === state.slideIndex) {
+      // Load current slide immediately
+      img.src = s.image || "";
+    } else {
+      // Load other slides on demand
+      img.dataset.src = s.image || "";
+      img.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='72' viewBox='0 0 120 72'%3E%3Crect width='120' height='72' fill='%230e1216'/%3E%3Ctext x='60' y='36' text-anchor='middle' fill='%239aa7b2' font-size='12'%3ESlide " + (i+1) + "%3C/text%3E%3C/svg%3E";
+      img.classList.add("lazy-thumb");
+
+      // Load image when thumbnail comes into view or on hover
+      const loadImage = () => {
+        if (img.dataset.src && !img.src.includes("data:image/svg+xml")) {
+          img.src = img.dataset.src;
+          delete img.dataset.src;
+          img.classList.remove("lazy-thumb");
+        }
+      };
+
+      th.addEventListener("mouseenter", loadImage);
+      th.addEventListener("focus", loadImage);
+    }
+
     const idx = document.createElement("div"); idx.className = "index"; idx.textContent = String(i+1);
     th.appendChild(img); th.appendChild(idx);
-    th.addEventListener("click", () => { state.slideIndex = i; renderSlide(); renderFilmstrip(); });
+    th.addEventListener("click", () => {
+      state.slideIndex = i;
+      renderSlide();
+      renderFilmstrip();
+    });
     filmstrip.appendChild(th);
   });
 }
@@ -691,29 +754,76 @@ async function publishToGitHub(){
   if(!owner || !repo || !token){ showToast("Enter owner, repo, and token.", "error"); return; }
   const api = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
 
-  // Get existing file sha if present
-  let sha = undefined;
-  try{
-    const headRes = await fetch(`${api}?ref=${encodeURIComponent(branch)}`, { headers: { Authorization: `token ${token}` } });
-    if(headRes.ok){ const j = await headRes.json(); sha = j.sha; }
-  }catch{}
+  // Show progress bar
+  publishProgress.style.display = 'flex';
+  progressFill.style.width = '0%';
+  progressText.textContent = 'Preparing...';
 
-  const content = await blobToBase64(toJSONBlob());
-  const body = { message: `Add/Update review ${state.data.matchId}`, content, branch };
-  if(sha) body.sha = sha;
+  try {
+    // Get existing file sha if present
+    progressText.textContent = 'Checking existing file...';
+    let sha = undefined;
+    try{
+      const headRes = await fetch(`${api}?ref=${encodeURIComponent(branch)}`, { headers: { Authorization: `token ${token}` } });
+      if(headRes.ok){ const j = await headRes.json(); sha = j.sha; }
+    }catch{}
 
-  const res = await fetch(api, {
-    method: "PUT",
-    headers: { Authorization: `token ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify(body)
-  });
-  if(!res.ok){
-    const t = await res.text();
-    showToast(`Publish failed: ${res.status}`, "error");
-    console.error(t);
-    return;
+    const content = await blobToBase64(toJSONBlob());
+    const body = { message: `Add/Update review ${state.data.matchId}`, content, branch };
+    if(sha) body.sha = sha;
+
+    // Use XMLHttpRequest for progress tracking
+    progressText.textContent = 'Uploading...';
+    await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+          const percentComplete = (e.loaded / e.total) * 100;
+          progressFill.style.width = percentComplete + '%';
+          progressText.textContent = `Uploading... ${Math.round(percentComplete)}%`;
+        }
+      });
+
+      xhr.addEventListener('load', async () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          progressFill.style.width = '100%';
+          progressText.textContent = 'Updating index...';
+
+          // Update index.json after successful publish
+          try {
+            await updateIndexAfterPublish(owner, repo, branch, token, state.data.matchId);
+            progressText.textContent = 'Complete!';
+          } catch (indexError) {
+            console.warn('Failed to update index.json:', indexError);
+            progressText.textContent = 'Complete! (Index update failed)';
+          }
+
+          setTimeout(() => {
+            publishProgress.style.display = 'none';
+            showToast("Published to GitHub.");
+          }, 500);
+          resolve();
+        } else {
+          reject(new Error(`HTTP ${xhr.status}: ${xhr.responseText}`));
+        }
+      });
+
+      xhr.addEventListener('error', () => {
+        reject(new Error('Network error during upload'));
+      });
+
+      xhr.open('PUT', api);
+      xhr.setRequestHeader('Authorization', `token ${token}`);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.send(JSON.stringify(body));
+    });
+
+  } catch (error) {
+    publishProgress.style.display = 'none';
+    showToast(`Publish failed: ${error.message}`, "error");
+    console.error(error);
   }
-  showToast("Published to GitHub.");
 }
 
 function blobToBase64(blob){
@@ -844,13 +954,22 @@ async function populatePublishedList(){
         if(hero){
           heroPortrait = document.createElement('img');
           heroPortrait.className = 'pub-hero-portrait';
-          // Use same URL generation logic as updateHeroPortrait
-          const name = hero.localized_name.replace(/\s+/g, '');
-          const firstLetter = name.charAt(0).toLowerCase();
-          const firstTwo = name.substring(0, 2).toLowerCase();
-          heroPortrait.src = `https://liquipedia.net/commons/images/${firstLetter}/${firstTwo}/${name}_icon_dota2_gameasset.png`;
+          // Use Steam CDN icon URL format
+          let iconUrl = `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/heroes/${p.hero}_icon.png`;
+
+          // Handle special cases where icon format might be different
+          if(p.hero === 'kez'){
+            // Kez uses full image as fallback since icon might not be available
+            iconUrl = `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/heroes/${p.hero}_full.png`;
+          }
+
+          heroPortrait.src = iconUrl;
           heroPortrait.alt = hero.localized_name;
           heroPortrait.title = hero.localized_name;
+          // Add error fallback
+          heroPortrait.onerror = function() {
+            this.src = `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/heroes/${p.hero}_full.png`;
+          };
         }
       }
 
@@ -946,6 +1065,86 @@ async function getFileSha(owner, repo, path, branch, token){
   if(!res.ok) return null;
   const j = await res.json();
   return j.sha;
+}
+
+// Update index.json after publishing a new match
+async function updateIndexAfterPublish(owner, repo, branch, token, matchId) {
+  try {
+    const idxPath = 'data/index.json';
+
+    // Fetch current index.json if it exists
+    let currentIndex = { published: [] };
+    let idxSha = null;
+
+    try {
+      idxSha = await getFileSha(owner, repo, idxPath, branch, token);
+      if (idxSha) {
+        const idxRes = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${idxPath}`);
+        if (idxRes.ok) {
+          currentIndex = await idxRes.json();
+        }
+      }
+    } catch (err) {
+      // index.json doesn't exist yet, use empty structure
+      console.log('index.json not found, creating new one');
+    }
+
+    // Fetch the newly published match data
+    const matchPath = `data/${encodeURIComponent(matchId)}.json`;
+    const matchRes = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${matchPath}`);
+    if (!matchRes.ok) {
+      throw new Error('Could not fetch newly published match data');
+    }
+
+    const matchData = await matchRes.json();
+
+    // Create entry for the new match
+    const newEntry = {
+      matchId: matchData.matchId || matchId,
+      hero: matchData.hero || '',
+      image: (matchData.slides && matchData.slides[0] && matchData.slides[0].image) || '',
+      ts: matchData.ts || new Date().toISOString()
+    };
+
+    // Remove existing entry if present, then add new one
+    currentIndex.published = (currentIndex.published || []).filter(p => p.matchId !== matchId);
+    currentIndex.published.unshift(newEntry); // Add to beginning for newest first
+
+    // Sort by timestamp descending
+    currentIndex.published.sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
+
+    // Update index.json on GitHub
+    const content = btoa(unescape(encodeURIComponent(JSON.stringify(currentIndex, null, 2))));
+    const api = `https://api.github.com/repos/${owner}/${repo}/contents/${idxPath}`;
+    const body = {
+      message: `Update index after publishing ${matchId}`,
+      content,
+      branch
+    };
+
+    if (idxSha) {
+      body.sha = idxSha; // Required for updating existing file
+    }
+
+    const putRes = await fetch(api, {
+      method: 'PUT',
+      headers: {
+        Authorization: `token ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (!putRes.ok) {
+      const errorText = await putRes.text();
+      throw new Error(`Failed to update index.json: ${putRes.status} ${errorText}`);
+    }
+
+    console.log(`Successfully updated index.json with match ${matchId}`);
+  } catch (error) {
+    console.error('Error updating index.json:', error);
+    throw error;
+  }
 }
 
 // Delete a published match file and remove it from data/index.json
