@@ -1902,6 +1902,24 @@ verifyBtn?.addEventListener('click', async () => {
 // Initialize autocomplete functionality
 initializeAutocomplete();
 
+// Clear localStorage when leaving the page to prevent conflicts
+window.addEventListener('beforeunload', () => {
+  try {
+    const keys = Object.keys(localStorage);
+    keys.forEach(key => {
+      // Clear all dota-review related data except encrypted credentials
+      if (key.startsWith('dota-review:') &&
+          !key.startsWith('dota-review:gh_enc') && // Keep encrypted credentials
+          key !== 'dota-review:welcomed') { // Keep welcome dialog preference
+        localStorage.removeItem(key);
+      }
+    });
+    console.log('Cleared dota-review localStorage data on page unload');
+  } catch (e) {
+    console.warn('Failed to clear localStorage on unload:', e);
+  }
+});
+
 // Start with edit disabled until verification
 updateVerifyUi();
 setControlsEnabled(false);
