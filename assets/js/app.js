@@ -543,55 +543,63 @@ function saveLocal(){
     }
   }
 
-  // Then try to save full data
-  try{
-    localStorage.setItem(state.autosaveKey, dataString);
-  }catch(err){
-    if(err.name === 'QuotaExceededError'){
-      console.warn("localStorage quota exceeded, skipping full data save");
+  // Then try to save full data, but skip if obviously too large for localStorage (~5MB total cap)
+  const MAX_FULL_SAVE_BYTES = 3 * 1024 * 1024; // leave headroom to avoid quota errors
 
-      // Try to save a compressed version without image data
-      try{
-        const compressedData = {
-          matchId: state.data.matchId,
-          rating: state.data.rating,
-          hero: state.data.hero,
-          slides: state.data.slides?.map(slide => ({
-            notes: slide.notes || [],
-            // Omit image data to save space
-            hasImage: !!(slide.image)
-          })) || []
-        };
-        const compressedString = JSON.stringify(compressedData);
+  const trySaveFull = () => {
+    try{
+      localStorage.setItem(state.autosaveKey, dataString);
+      return true;
+    }catch(err){
+      if(err.name !== 'QuotaExceededError'){
+        console.error("Failed to save to localStorage:", err);
+      }
+      return false;
+    }
+  };
 
-        // More aggressive compression - save even if not significantly smaller
-        if(compressedString.length < dataString.length){
+  if(dataString.length <= MAX_FULL_SAVE_BYTES && trySaveFull()){
+    // full save succeeded
+  } else {
+    // Save a compressed version without image data; fall back further if needed
+    try{
+      const compressedData = {
+        matchId: state.data.matchId,
+        rating: state.data.rating,
+        hero: state.data.hero,
+        slides: state.data.slides?.map(slide => ({
+          notes: slide.notes || [],
+          // Omit image data to save space
+          hasImage: !!(slide.image)
+        })) || []
+      };
+      const compressedString = JSON.stringify(compressedData);
+
+      // Save compressed if it meaningfully reduces size
+      if(compressedString.length < dataString.length){
+        try {
+          localStorage.setItem(`${state.autosaveKey}:compressed`, compressedString);
+          console.log("Saved compressed version to localStorage");
+        } catch(compressQuotaErr) {
+          // If even compressed data is too big, try ultra-minimal version
+          console.warn("Compressed data too large, saving ultra-minimal backup");
+          const ultraMinimalData = {
+            matchId: state.data.matchId,
+            rating: state.data.rating,
+            hero: state.data.hero,
+            slideCount: state.data.slides?.length || 0
+          };
+          const ultraMinimalString = JSON.stringify(ultraMinimalData);
           try {
-            localStorage.setItem(`${state.autosaveKey}:compressed`, compressedString);
-            console.log("Saved compressed version to localStorage");
-          } catch(compressQuotaErr) {
-            // If even compressed data is too big, try ultra-minimal version
-            console.warn("Compressed data still too large, trying ultra-minimal version");
-            const ultraMinimalData = {
-              matchId: state.data.matchId,
-              rating: state.data.rating,
-              hero: state.data.hero,
-              slideCount: state.data.slides?.length || 0
-            };
-            const ultraMinimalString = JSON.stringify(ultraMinimalData);
-            try {
-              localStorage.setItem(`${state.autosaveKey}:minimal`, ultraMinimalString);
-              console.log("Saved ultra-minimal version to localStorage");
-            } catch(ultraErr) {
-              console.warn("Even ultra-minimal data couldn't be saved:", ultraErr.message);
-            }
+            localStorage.setItem(`${state.autosaveKey}:minimal`, ultraMinimalString);
+            console.log("Saved ultra-minimal version to localStorage");
+          } catch(ultraErr) {
+            console.warn("Even ultra-minimal data couldn't be saved:", ultraErr.message);
           }
         }
-      }catch(compressErr){
-        console.warn("Failed to save even compressed data:", compressErr.message);
       }
-    } else {
-      console.error("Failed to save to localStorage:", err);
+    }catch(compressErr){
+      console.warn("Failed to save even compressed data:", compressErr.message);
     }
   }
 }
@@ -1758,24 +1766,43 @@ async function renameFileOnGitHub(owner, repo, branch, token, oldPath, newPath, 
 
     const fileData = await getRes.json();
 
-    if (!fileData.content) {
-      throw new Error(`File ${oldPath} appears to be empty or corrupted`);
-    }
-
-    const content = fileData.content;
     const sha = fileData.sha;
-
-    // Update the content to reflect the new matchId
     let decodedContent;
-    try {
-      const decodedText = atob(content);
-      if (!decodedText || decodedText.trim() === '') {
-        throw new Error('Decoded content is empty');
+
+    // Try to use base64 content from contents API when available and small enough
+    const tryParseBase64 = () => {
+      const raw = String(fileData.content || '').replace(/\n/g, '');
+      if (!raw) return false;
+      try {
+        const decodedText = atob(raw);
+        if (!decodedText || decodedText.trim() === '') return false;
+        decodedContent = JSON.parse(decodedText);
+        return true;
+      } catch (_) { return false; }
+    };
+
+    const tryParseRawUrl = async () => {
+      const url = fileData.download_url || `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${oldPath}`;
+      const rawRes = await fetch(url);
+      if (!rawRes.ok) return false;
+      const text = await rawRes.text();
+      try { decodedContent = JSON.parse(text); return true; } catch { return false; }
+    };
+
+    if (!(tryParseBase64()) && !(await tryParseRawUrl())) {
+      // As a last resort, use Git Blobs API to fetch full content by sha
+      try {
+        const blobRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/blobs/${encodeURIComponent(sha)}`, {
+          headers: { Authorization: `token ${token}` }
+        });
+        if (!blobRes.ok) throw new Error('blob fetch failed');
+        const blobJson = await blobRes.json();
+        const blobContent = String(blobJson.content || '').replace(/\n/g, '');
+        const blobText = atob(blobContent);
+        decodedContent = JSON.parse(blobText);
+      } catch (e) {
+        throw new Error(`File ${oldPath} appears to be empty, truncated, or unreadable`);
       }
-      decodedContent = JSON.parse(decodedText);
-    } catch (parseError) {
-      console.error('Failed to parse JSON content:', parseError);
-      throw new Error(`Invalid JSON in file ${oldPath}: ${parseError.message}`);
     }
 
     decodedContent.matchId = newMatchId;
