@@ -1254,6 +1254,12 @@ async function renameMatchId(newId){
     if(owner && repo && token){
       try {
         showToast("Renaming file on GitHub...", "info");
+        // Show progress overlay for rename operation
+        try{
+          publishProgress.style.display = 'flex';
+          progressFill.style.width = '0%';
+          progressText.textContent = 'Starting rename...';
+        }catch{}
 
         // Rename the JSON file on GitHub
         const oldPath = `data/${encodeURIComponent(oldId)}.json`;
@@ -1263,8 +1269,10 @@ async function renameMatchId(newId){
           await renameFileOnGitHub(owner, repo, branch, token, oldPath, newPath, nid);
 
           // Update index.json to reflect the new match ID
+          try{ progressFill.style.width = '85%'; progressText.textContent = 'Updating index...'; }catch{}
           await updateIndexForRenamedMatch(owner, repo, branch, token, oldId, nid);
 
+          try{ progressFill.style.width = '100%'; progressText.textContent = 'Complete!'; setTimeout(()=>{ publishProgress.style.display='none'; }, 500);}catch{}
           showToast(`Match ID changed to "${nid}". File renamed and index updated on GitHub.`, "info");
         } catch(githubError) {
           console.error("Failed to rename on GitHub:", githubError);
@@ -1279,11 +1287,13 @@ async function renameMatchId(newId){
             errorMessage = `Match ID changed locally to "${nid}". Network error during GitHub operation.`;
           }
 
+          try{ progressText.textContent = 'Operation failed'; setTimeout(()=>{ publishProgress.style.display='none'; }, 400);}catch{}
           showToast(errorMessage, "warning");
         }
       } catch(err) {
         console.error("Error during GitHub operations:", err);
         showToast(`Match ID changed locally to "${nid}". Error during GitHub operations.`, "warning");
+        try{ progressText.textContent = 'Operation failed'; setTimeout(()=>{ publishProgress.style.display='none'; }, 400);}catch{}
       }
     }
   }
@@ -1753,6 +1763,7 @@ async function getFileSha(owner, repo, path, branch, token){
 async function renameFileOnGitHub(owner, repo, branch, token, oldPath, newPath, newMatchId) {
   try {
     // First, get the content of the old file
+    try{ progressFill.style.width = '15%'; progressText.textContent = 'Fetching current file...'; }catch{}
     const getRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${oldPath}?ref=${encodeURIComponent(branch)}`, {
       headers: { Authorization: `token ${token}` }
     });
@@ -1782,6 +1793,7 @@ async function renameFileOnGitHub(owner, repo, branch, token, oldPath, newPath, 
     };
 
     const tryParseRawUrl = async () => {
+      try{ progressFill.style.width = '30%'; progressText.textContent = 'Downloading raw file...'; }catch{}
       const url = fileData.download_url || `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${oldPath}`;
       const rawRes = await fetch(url);
       if (!rawRes.ok) return false;
@@ -1792,6 +1804,7 @@ async function renameFileOnGitHub(owner, repo, branch, token, oldPath, newPath, 
     if (!(tryParseBase64()) && !(await tryParseRawUrl())) {
       // As a last resort, use Git Blobs API to fetch full content by sha
       try {
+        try{ progressFill.style.width = '45%'; progressText.textContent = 'Fetching blob data...'; }catch{}
         const blobRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/blobs/${encodeURIComponent(sha)}`, {
           headers: { Authorization: `token ${token}` }
         });
@@ -1808,6 +1821,7 @@ async function renameFileOnGitHub(owner, repo, branch, token, oldPath, newPath, 
     decodedContent.matchId = newMatchId;
 
     // Create the new file with updated content
+    try{ progressFill.style.width = '60%'; progressText.textContent = 'Creating new file...'; }catch{}
     const newContent = btoa(unescape(encodeURIComponent(JSON.stringify(decodedContent, null, 2))));
     const createApi = `https://api.github.com/repos/${owner}/${repo}/contents/${newPath}`;
     const createRes = await fetch(createApi, {
@@ -1829,6 +1843,7 @@ async function renameFileOnGitHub(owner, repo, branch, token, oldPath, newPath, 
     }
 
     // Delete the old file
+    try{ progressFill.style.width = '75%'; progressText.textContent = 'Deleting old file...'; }catch{}
     const deleteApi = `https://api.github.com/repos/${owner}/${repo}/contents/${oldPath}`;
     const deleteRes = await fetch(deleteApi, {
       method: 'DELETE',
