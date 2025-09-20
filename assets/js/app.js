@@ -477,16 +477,16 @@ function saveLocal(){
     if(state.data.matchId){
       const metadata = {
         matchId: state.data.matchId,
-        hero: state.data.hero,
-        rating: state.data.rating,
+        hero: state.data.hero || "",
+        rating: state.data.rating || 0,
         slideCount: state.data.slides?.length || 0,
-        lastModified: new Date().toISOString(),
-        thumbnail: state.data.slides?.[0]?.image?.substring(0, 500) || null
+        lastModified: new Date().toISOString()
+        // Removed thumbnail to prevent quota issues
       };
       const metadataString = JSON.stringify(metadata);
 
       // Only save if under size limit
-      if(metadataString.length <= 2 * 1024 * 1024) { // 2MB limit
+      if(metadataString.length <= 1024 * 1024) { // 1MB limit for metadata
         localStorage.setItem(`dota-review:local:${state.data.matchId}`, metadataString);
       }
     }
@@ -1108,7 +1108,8 @@ async function renameMatchId(newId){
       let dataUrl = `./data/${encodeURIComponent(nid)}.json`;
       // If we're on GitHub Pages, use the full URL
       if(window.location.hostname.includes('github.io')){
-        dataUrl = `${window.location.origin}${window.location.pathname.replace(/\/$/, '')}/data/${encodeURIComponent(nid)}.json`;
+        const basePath = window.location.pathname.replace(/\/$/, '').replace(/\/index\.html$/, '');
+        dataUrl = `${window.location.origin}${basePath}/data/${encodeURIComponent(nid)}.json`;
       }
 
       const checkRes = await fetch(dataUrl, { cache: "no-store" });
@@ -1140,19 +1141,20 @@ async function renameMatchId(newId){
     // Store only essential metadata instead of full JSON to avoid quota issues
     const metadata = {
       matchId: nid,
-      hero: state.data.hero,
-      rating: state.data.rating,
+      hero: state.data.hero || "",
+      rating: state.data.rating || 0,
       slideCount: state.data.slides?.length || 0,
-      lastModified: new Date().toISOString(),
-      // Store first slide image as thumbnail if it exists and is not too large
-      thumbnail: state.data.slides?.[0]?.image?.substring(0, 500) || null // Limit size
+      lastModified: new Date().toISOString()
+      // Removed thumbnail to prevent quota issues
     };
 
     const metadataString = JSON.stringify(metadata);
 
-    // Check if the data would exceed a reasonable size limit (2MB)
-    if(metadataString.length > 2 * 1024 * 1024) {
-      throw new Error("Data too large for local storage");
+    // Check if the data would exceed a reasonable size limit (1MB for metadata)
+    if(metadataString.length > 1024 * 1024) {
+      console.warn("Metadata too large, skipping local backup");
+      showToast(`Match ID changed to "${nid}".`, "info");
+      return;
     }
 
     localStorage.setItem(`dota-review:local:${nid}`, metadataString);
@@ -1160,12 +1162,11 @@ async function renameMatchId(newId){
 
   } catch(err) {
     console.warn("Could not save local metadata:", err);
-    // Don't show error toast for quota issues, just log it
-    if(err.name !== 'QuotaExceededError') {
-      showToast(`Match ID changed to "${nid}" (metadata save failed).`, "warning");
-    } else {
-      showToast(`Match ID changed to "${nid}".`, "info");
+    // Silently handle quota issues
+    if(err.name === 'QuotaExceededError') {
+      console.warn("localStorage quota exceeded for metadata, skipping backup");
     }
+    showToast(`Match ID changed to "${nid}".`, "info");
   }
 
   renderAll();
