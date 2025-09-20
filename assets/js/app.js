@@ -320,13 +320,36 @@ function newMatch(matchId){
 async function loadMatch(matchId){
   const id = String(matchId || matchIdInput.value || "").trim();
   if(!id){ return; }
-  // Try localStorage first
+
+  let loaded = false;
+
+  // Priority order for loading:
+  // 1. LocalStorage autosave (highest priority - user's latest changes)
+  // 2. LocalStorage backup (for edited match IDs)
+  // 3. JSON file from data/ directory
+
+  // Try localStorage autosave first
   const local = localStorage.getItem(`dota-review:${id}`);
   if(local){
-    try { state.data = JSON.parse(local); } catch { /* ignore */ }
+    try {
+      state.data = JSON.parse(local);
+      loaded = true;
+    } catch { /* ignore */ }
   }
-  if(!state.data || state.data.matchId !== id){
-    // try to fetch from data/{id}.json
+
+  // If not found or doesn't match, try local backup
+  if(!loaded || (state.data && state.data.matchId !== id)){
+    const localBackup = localStorage.getItem(`dota-review:local:${id}`);
+    if(localBackup){
+      try {
+        state.data = JSON.parse(localBackup);
+        loaded = true;
+      } catch { /* ignore */ }
+    }
+  }
+
+  // If still not loaded, try to fetch from data/{id}.json
+  if(!loaded || (state.data && state.data.matchId !== id)){
     try{
       showToast("Loading match data...", "info");
       const res = await fetch(`./data/${encodeURIComponent(id)}.json`, { cache: "no-store" });
@@ -337,6 +360,7 @@ async function loadMatch(matchId){
           showToast("Large file detected - this may take a moment to load", "info");
         }
         state.data = JSON.parse(jsonText);
+        loaded = true;
         showToast(`Loaded match with ${state.data.slides?.length || 0} slides`, "info");
       }
     }catch(err){
@@ -344,9 +368,12 @@ async function loadMatch(matchId){
       showToast("Failed to load match data", "error");
     }
   }
-  if(!state.data || state.data.matchId !== id){
+
+  // If still no data, create new match
+  if(!loaded || !state.data || state.data.matchId !== id){
     state.data = { matchId: id, rating: 0, slides: [] };
   }
+
   state.slideIndex = 0;
   updateAutosaveKey();
   renderAll();
@@ -354,7 +381,13 @@ async function loadMatch(matchId){
 
 function saveLocal(){
   if(!state.autosaveKey) return;
-  try{ localStorage.setItem(state.autosaveKey, JSON.stringify(state.data)); }catch{}
+  try{
+    localStorage.setItem(state.autosaveKey, JSON.stringify(state.data));
+    // Also save to local backup for persistence
+    if(state.data.matchId){
+      localStorage.setItem(`dota-review:local:${state.data.matchId}`, JSON.stringify(state.data));
+    }
+  }catch{}
 }
 
 // Populate hero dropdown
@@ -946,15 +979,52 @@ function showToast(message, type){
   setTimeout(() => { el.remove(); }, 4000);
 }
 
-function renameMatchId(newId){
+async function renameMatchId(newId){
   const nid = String(newId || "").trim();
   if(!nid) return;
+
+  const oldId = state.data.matchId;
   const oldKey = state.autosaveKey;
+
+  // Check if new ID already exists
+  if(nid !== oldId){
+    try {
+      const checkRes = await fetch(`./data/${encodeURIComponent(nid)}.json`, { cache: "no-store" });
+      if(checkRes.ok){
+        showToast(`Match ID "${nid}" already exists. Choose a different ID.`, "error");
+        return;
+      }
+    } catch(err) {
+      // File doesn't exist, which is good
+    }
+  }
+
+  // Update in-memory state
   state.data.matchId = nid;
   updateAutosaveKey();
+
+  // Save to localStorage with new key
   if(oldKey && oldKey !== state.autosaveKey){
     try{ localStorage.removeItem(oldKey); }catch{}
   }
+  saveLocal();
+
+  // If this was loaded from a JSON file, we should save it locally too
+  // This ensures the change persists even if not published to GitHub
+  try {
+    const jsonData = JSON.stringify(state.data, null, 2);
+    const blob = new Blob([jsonData], { type: "application/json" });
+
+    // For local development, we'll save to localStorage as backup
+    // In a real deployment, this would need server-side support to save to disk
+    localStorage.setItem(`dota-review:local:${nid}`, jsonData);
+
+    showToast(`Match ID changed to "${nid}". Changes saved locally.`, "info");
+  } catch(err) {
+    console.warn("Could not save local JSON backup:", err);
+    showToast(`Match ID changed to "${nid}" (local save failed).`, "warning");
+  }
+
   renderAll();
 }
 
