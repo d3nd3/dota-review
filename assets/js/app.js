@@ -341,7 +341,31 @@ async function loadMatch(matchId){
     try {
       state.data = JSON.parse(local);
       loaded = true;
-    } catch { /* ignore */ }
+    } catch(err) {
+      console.warn("Failed to parse local autosave data:", err);
+      // Try compressed version if available
+      const compressed = localStorage.getItem(`dota-review:${id}:compressed`);
+      if(compressed){
+        try {
+          const compressedData = JSON.parse(compressed);
+          // Convert compressed format back to full format
+          state.data = {
+            matchId: compressedData.matchId,
+            rating: compressedData.rating,
+            hero: compressedData.hero,
+            slides: compressedData.slides?.map(slide => ({
+              image: "", // Will be empty, user can re-add images
+              notes: slide.notes || []
+            })) || []
+          };
+          loaded = true;
+          console.log("Loaded compressed data from localStorage");
+          showToast("Loaded match with compressed data. Images may be missing.", "info");
+        } catch(compressErr) {
+          console.warn("Failed to parse compressed data:", compressErr);
+        }
+      }
+    }
   }
 
   // If not found or doesn't match, try local backup
@@ -476,12 +500,12 @@ function checkLocalVsPublished(matchId){
 
 function saveLocal(){
   if(!state.autosaveKey) return;
-  try{
-    // Save full data to autosave key
-    localStorage.setItem(state.autosaveKey, JSON.stringify(state.data));
 
-    // Save metadata backup to avoid quota issues
-    if(state.data.matchId){
+  const dataString = JSON.stringify(state.data);
+
+  // First try to save metadata (smaller, more important for recovery)
+  if(state.data.matchId){
+    try{
       const metadata = {
         matchId: state.data.matchId,
         hero: state.data.hero || "",
@@ -496,11 +520,42 @@ function saveLocal(){
       if(metadataString.length <= 1024 * 1024) { // 1MB limit for metadata
         localStorage.setItem(`dota-review:local:${state.data.matchId}`, metadataString);
       }
+    }catch(err){
+      console.warn("Failed to save metadata to localStorage:", err.message);
     }
+  }
+
+  // Then try to save full data
+  try{
+    localStorage.setItem(state.autosaveKey, dataString);
   }catch(err){
-    // Silently handle quota exceeded errors
     if(err.name === 'QuotaExceededError'){
-      console.warn("localStorage quota exceeded, skipping backup save");
+      console.warn("localStorage quota exceeded, skipping full data save");
+
+      // Try to save a compressed version without image data
+      try{
+        const compressedData = {
+          matchId: state.data.matchId,
+          rating: state.data.rating,
+          hero: state.data.hero,
+          slides: state.data.slides?.map(slide => ({
+            notes: slide.notes || [],
+            // Omit image data to save space
+            hasImage: !!(slide.image)
+          })) || []
+        };
+        const compressedString = JSON.stringify(compressedData);
+
+        // Only save if it's significantly smaller
+        if(compressedString.length < dataString.length * 0.5){
+          localStorage.setItem(`${state.autosaveKey}:compressed`, compressedString);
+          console.log("Saved compressed version to localStorage");
+        }
+      }catch(compressErr){
+        console.warn("Failed to save even compressed data:", compressErr.message);
+      }
+    } else {
+      console.error("Failed to save to localStorage:", err);
     }
   }
 }
@@ -1159,15 +1214,32 @@ async function renameMatchId(newId){
         // Rename the JSON file on GitHub
         const oldPath = `data/${encodeURIComponent(oldId)}.json`;
         const newPath = `data/${encodeURIComponent(nid)}.json`;
-        await renameFileOnGitHub(owner, repo, branch, token, oldPath, newPath, nid);
 
-        // Update index.json to reflect the new match ID
-        await updateIndexForRenamedMatch(owner, repo, branch, token, oldId, nid);
+        try {
+          await renameFileOnGitHub(owner, repo, branch, token, oldPath, newPath, nid);
 
-        showToast(`Match ID changed to "${nid}". File renamed and index updated on GitHub.`, "info");
-      } catch(githubError) {
-        console.error("Failed to rename on GitHub:", githubError);
-        showToast(`Match ID changed locally to "${nid}", but GitHub operations failed. You may need to publish manually.`, "warning");
+          // Update index.json to reflect the new match ID
+          await updateIndexForRenamedMatch(owner, repo, branch, token, oldId, nid);
+
+          showToast(`Match ID changed to "${nid}". File renamed and index updated on GitHub.`, "info");
+        } catch(githubError) {
+          console.error("Failed to rename on GitHub:", githubError);
+
+          // Provide more specific error messages based on the error type
+          let errorMessage = `Match ID changed locally to "${nid}", but GitHub operations failed.`;
+          if (githubError.message.includes('File not found')) {
+            errorMessage = `Match ID changed locally to "${nid}". The match wasn't published to GitHub yet, so no remote file to rename.`;
+          } else if (githubError.message.includes('Invalid JSON')) {
+            errorMessage = `Match ID changed locally to "${nid}". The published file appears corrupted. You may need to re-publish.`;
+          } else if (githubError.message.includes('Could not fetch')) {
+            errorMessage = `Match ID changed locally to "${nid}". Network error during GitHub operation.`;
+          }
+
+          showToast(errorMessage, "warning");
+        }
+      } catch(err) {
+        console.error("Error during GitHub operations:", err);
+        showToast(`Match ID changed locally to "${nid}". Error during GitHub operations.`, "warning");
       }
     }
   }
@@ -1642,15 +1714,34 @@ async function renameFileOnGitHub(owner, repo, branch, token, oldPath, newPath, 
     });
 
     if (!getRes.ok) {
-      throw new Error(`Could not fetch old file: ${getRes.status}`);
+      if (getRes.status === 404) {
+        throw new Error(`File not found: ${oldPath}. The match may not be published yet.`);
+      }
+      throw new Error(`Could not fetch old file: ${getRes.status} ${getRes.statusText}`);
     }
 
     const fileData = await getRes.json();
+
+    if (!fileData.content) {
+      throw new Error(`File ${oldPath} appears to be empty or corrupted`);
+    }
+
     const content = fileData.content;
     const sha = fileData.sha;
 
     // Update the content to reflect the new matchId
-    const decodedContent = JSON.parse(atob(content));
+    let decodedContent;
+    try {
+      const decodedText = atob(content);
+      if (!decodedText || decodedText.trim() === '') {
+        throw new Error('Decoded content is empty');
+      }
+      decodedContent = JSON.parse(decodedText);
+    } catch (parseError) {
+      console.error('Failed to parse JSON content:', parseError);
+      throw new Error(`Invalid JSON in file ${oldPath}: ${parseError.message}`);
+    }
+
     decodedContent.matchId = newMatchId;
 
     // Create the new file with updated content
@@ -1670,7 +1761,8 @@ async function renameFileOnGitHub(owner, repo, branch, token, oldPath, newPath, 
     });
 
     if (!createRes.ok) {
-      throw new Error(`Failed to create new file: ${createRes.status}`);
+      const errorText = await createRes.text().catch(() => 'Unknown error');
+      throw new Error(`Failed to create new file: ${createRes.status} ${createRes.statusText}. ${errorText}`);
     }
 
     // Delete the old file
@@ -1689,7 +1781,8 @@ async function renameFileOnGitHub(owner, repo, branch, token, oldPath, newPath, 
     });
 
     if (!deleteRes.ok) {
-      console.warn(`Failed to delete old file ${oldPath}: ${deleteRes.status}`);
+      console.warn(`Failed to delete old file ${oldPath}: ${deleteRes.status} ${deleteRes.statusText}`);
+      // Don't throw error here - the new file was created successfully
     }
 
     console.log(`Successfully renamed ${oldPath} to ${newPath}`);
@@ -1794,10 +1887,18 @@ async function updateIndexForRenamedMatch(owner, repo, branch, token, oldMatchId
 
     const idxRes = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${idxPath}`);
     if (!idxRes.ok) {
-      throw new Error('Could not fetch index.json');
+      if (idxRes.status === 404) {
+        throw new Error('index.json not found on GitHub');
+      }
+      throw new Error(`Could not fetch index.json: ${idxRes.status} ${idxRes.statusText}`);
     }
 
-    const currentIndex = await idxRes.json();
+    let currentIndex;
+    try {
+      currentIndex = await idxRes.json();
+    } catch (parseError) {
+      throw new Error(`Invalid JSON in index.json: ${parseError.message}`);
+    }
 
     // Find the entry for the old match ID
     const oldEntry = (currentIndex.published || []).find(p => p.matchId === oldMatchId);
@@ -1835,8 +1936,8 @@ async function updateIndexForRenamedMatch(owner, repo, branch, token, oldMatchId
     });
 
     if (!putRes.ok) {
-      const errorText = await putRes.text();
-      throw new Error(`Failed to update index.json: ${putRes.status} ${errorText}`);
+      const errorText = await putRes.text().catch(() => 'Unknown error');
+      throw new Error(`Failed to update index.json: ${putRes.status} ${putRes.statusText}. ${errorText}`);
     }
 
     console.log(`Successfully updated index.json for renamed match ${oldMatchId} -> ${newMatchId}`);
