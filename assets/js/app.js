@@ -138,6 +138,11 @@ const state = {
   autosaveKey: null,
   verified: false,
   selectedNoteIndex: null,
+  // Autocomplete state
+  availableMatchIds: [],
+  currentSuggestions: [],
+  selectedSuggestionIndex: -1,
+  suggestionsVisible: false,
 };
 
 // Elements
@@ -148,6 +153,8 @@ const saveMatchIdBtn = $("#saveMatchIdBtn");
 const loadBtn = $("#loadBtn");
 const newBtn = $("#newBtn");
 const editToggle = $("#editToggle");
+const matchIdSuggestions = $("#matchIdSuggestions");
+const suggestionList = $("#suggestionList");
 const ratingInput = $("#ratingInput");
 const ratingValue = $("#ratingValue");
 const addSlideBtn = $("#addSlideBtn");
@@ -301,8 +308,8 @@ function setControlsEnabled(enabled){
     if(editMatchIdBtn) editMatchIdBtn.style.display = 'none';
     if(saveMatchIdBtn) saveMatchIdBtn.style.display = 'none';
 
-    // Make match ID readonly
-    if(matchIdInput) matchIdInput.readOnly = true;
+    // Make match ID input editable for autocomplete (not readonly)
+    if(matchIdInput) matchIdInput.readOnly = false;
   }
 }
 
@@ -538,13 +545,10 @@ function updateHeroPortrait(){
 
 function renderAll(){
   matchIdInput.value = state.data.matchId || "";
-  // Set readonly based on edit mode and whether we're currently editing
-  if(!state.edit){
-    matchIdInput.readOnly = true;
-  } else if(state.edit && saveMatchIdBtn.style.display === 'none'){
-    // If in edit mode but save button is not visible, make readonly
-    matchIdInput.readOnly = true;
-  }
+  // Match ID input is now always editable for autocomplete functionality
+  // Only make it readonly when in edit mode and save button is visible
+  matchIdInput.readOnly = state.edit && saveMatchIdBtn.style.display !== 'none';
+
   ratingInput.value = String(state.data.rating || 0);
   // match-level hero
   if(matchHeroSelect){
@@ -1237,6 +1241,216 @@ async function loadPublished(){
   }catch{return []}
 }
 
+// Get all available match IDs from both published and local sources
+async function getAllMatchIds(){
+  const matchIds = new Set();
+
+  // Add published match IDs
+  try {
+    const published = await loadPublished();
+    published.forEach(match => {
+      if(match.matchId) matchIds.add(match.matchId);
+    });
+  } catch(e) {
+    console.warn("Could not load published matches:", e);
+  }
+
+  // Add local match IDs from localStorage
+  try {
+    const keys = Object.keys(localStorage);
+    keys.forEach(key => {
+      if(key.startsWith('dota-review:') && !key.startsWith('dota-review:local:') && !key.startsWith('dota-review:gh') && !key.startsWith('dota-review:welcomed') && !key.startsWith('dota-review:enc')) {
+        const matchId = key.replace('dota-review:', '');
+        if(matchId) matchIds.add(matchId);
+      }
+      // Also check metadata keys
+      if(key.startsWith('dota-review:local:')) {
+        const matchId = key.replace('dota-review:local:', '');
+        if(matchId) matchIds.add(matchId);
+      }
+    });
+  } catch(e) {
+    console.warn("Could not load local match IDs:", e);
+  }
+
+  return Array.from(matchIds).sort();
+}
+
+// Fuzzy match function - simple substring matching with scoring
+function fuzzyMatch(query, candidates) {
+  if(!query) return candidates.slice(0, 10); // Return first 10 if no query
+
+  query = query.toLowerCase();
+  const matches = [];
+
+  candidates.forEach(candidate => {
+    const candidateLower = candidate.toLowerCase();
+    const score = getMatchScore(query, candidateLower);
+    if(score > 0) {
+      matches.push({ id: candidate, score });
+    }
+  });
+
+  // Sort by score (highest first), then alphabetically
+  matches.sort((a, b) => {
+    if(a.score !== b.score) return b.score - a.score;
+    return a.id.localeCompare(b.id);
+  });
+
+  return matches.slice(0, 10).map(match => match.id);
+}
+
+// Calculate match score for fuzzy matching
+function getMatchScore(query, candidate) {
+  if(!query || !candidate) return 0;
+
+  // Exact match gets highest score
+  if(candidate === query) return 1000;
+
+  // Starts with query gets high score
+  if(candidate.startsWith(query)) return 100;
+
+  // Contains query gets medium score
+  if(candidate.includes(query)) return 50;
+
+  // Fuzzy character matching (each consecutive character match)
+  let score = 0;
+  let queryIndex = 0;
+  for(let i = 0; i < candidate.length && queryIndex < query.length; i++) {
+    if(candidate[i] === query[queryIndex]) {
+      score += 10 - queryIndex; // Earlier matches in query get higher score
+      queryIndex++;
+    }
+  }
+
+  // Only return score if we matched all characters
+  return queryIndex === query.length ? score : 0;
+}
+
+// Autocomplete functionality
+async function initializeAutocomplete() {
+  // Load available match IDs
+  state.availableMatchIds = await getAllMatchIds();
+  console.log(`Loaded ${state.availableMatchIds.length} available match IDs`);
+}
+
+function showSuggestions(suggestions) {
+  if (!suggestions || suggestions.length === 0) {
+    hideSuggestions();
+    return;
+  }
+
+  suggestionList.innerHTML = '';
+  suggestions.forEach((matchId, index) => {
+    const item = document.createElement('div');
+    item.className = 'suggestion-item';
+    item.dataset.matchId = matchId;
+    item.innerHTML = `
+      <span class="match-id">${matchId}</span>
+      <span class="match-type">${isPublishedMatch(matchId) ? 'published' : 'local'}</span>
+    `;
+
+    item.addEventListener('click', () => {
+      selectMatchId(matchId);
+    });
+
+    item.addEventListener('mouseenter', () => {
+      setSelectedSuggestion(index);
+    });
+
+    suggestionList.appendChild(item);
+  });
+
+  matchIdSuggestions.style.display = 'block';
+  state.suggestionsVisible = true;
+  state.currentSuggestions = suggestions;
+  state.selectedSuggestionIndex = -1;
+}
+
+function hideSuggestions() {
+  matchIdSuggestions.style.display = 'none';
+  state.suggestionsVisible = false;
+  state.currentSuggestions = [];
+  state.selectedSuggestionIndex = -1;
+}
+
+function setSelectedSuggestion(index) {
+  // Remove previous selection
+  const items = suggestionList.querySelectorAll('.suggestion-item');
+  items.forEach(item => item.classList.remove('selected'));
+
+  // Add new selection
+  if (index >= 0 && index < items.length) {
+    items[index].classList.add('selected');
+    state.selectedSuggestionIndex = index;
+    // Scroll into view if needed
+    items[index].scrollIntoView({ block: 'nearest' });
+  } else {
+    state.selectedSuggestionIndex = -1;
+  }
+}
+
+function selectMatchId(matchId) {
+  matchIdInput.value = matchId;
+  hideSuggestions();
+  loadMatch(matchId);
+}
+
+function isPublishedMatch(matchId) {
+  // Check if this match ID exists in published data
+  // This is a simple check - we could cache this for better performance
+  return state.availableMatchIds.includes(matchId) && !localStorage.getItem(`dota-review:${matchId}`);
+}
+
+function updateSuggestions(query) {
+  if (!query.trim()) {
+    hideSuggestions();
+    return;
+  }
+
+  const suggestions = fuzzyMatch(query, state.availableMatchIds);
+  showSuggestions(suggestions);
+}
+
+function handleInputKeydown(event) {
+  if (!state.suggestionsVisible) return;
+
+  switch (event.key) {
+    case 'ArrowDown':
+      event.preventDefault();
+      const nextIndex = Math.min(state.selectedSuggestionIndex + 1, state.currentSuggestions.length - 1);
+      setSelectedSuggestion(nextIndex);
+      break;
+
+    case 'ArrowUp':
+      event.preventDefault();
+      const prevIndex = Math.max(state.selectedSuggestionIndex - 1, -1);
+      setSelectedSuggestion(prevIndex);
+      break;
+
+    case 'Enter':
+      event.preventDefault();
+      if (state.selectedSuggestionIndex >= 0) {
+        const selectedMatchId = state.currentSuggestions[state.selectedSuggestionIndex];
+        selectMatchId(selectedMatchId);
+      } else {
+        // No suggestion selected, try to load the current input value
+        const currentValue = matchIdInput.value.trim();
+        if (currentValue) {
+          loadMatch(currentValue);
+          hideSuggestions();
+        }
+      }
+      break;
+
+    case 'Escape':
+      event.preventDefault();
+      hideSuggestions();
+      matchIdInput.blur();
+      break;
+  }
+}
+
 // Populate the publishedList node and wire click handlers
 async function populatePublishedList(){
   try{
@@ -1301,16 +1515,45 @@ loadBtn.addEventListener("click", () => loadMatch());
 newBtn.addEventListener("click", () => { newMatch(""); /* edit remains gated */ });
 editMatchIdBtn?.addEventListener("click", enableMatchIdEdit);
 saveMatchIdBtn?.addEventListener("click", saveMatchId);
+
+// Autocomplete event listeners
+matchIdInput.addEventListener("input", (e) => {
+  const query = e.target.value.trim();
+  updateSuggestions(query);
+});
+
 matchIdInput.addEventListener("keydown", (e) => {
-  if(e.key === "Enter"){
+  // Handle autocomplete keyboard navigation first
+  handleInputKeydown(e);
+
+  // Handle existing functionality
+  if(e.key === "Enter" && !state.suggestionsVisible){
     if(state.edit && !matchIdInput.readOnly){
       e.preventDefault();
       saveMatchId();
     } else if(!state.edit){
-      loadMatch();
+      const currentValue = matchIdInput.value.trim();
+      if (currentValue) {
+        loadMatch(currentValue);
+      }
     }
   }
 });
+
+matchIdInput.addEventListener("blur", () => {
+  // Delay hiding suggestions to allow clicks on suggestions
+  setTimeout(() => {
+    hideSuggestions();
+  }, 150);
+});
+
+matchIdInput.addEventListener("focus", () => {
+  const query = matchIdInput.value.trim();
+  if (query) {
+    updateSuggestions(query);
+  }
+});
+
 matchIdInput.addEventListener("change", () => {
   if(state.edit && !matchIdInput.readOnly){
     saveMatchId();
@@ -1655,6 +1898,9 @@ verifyBtn?.addEventListener('click', async () => {
     verifyAccess({ silent: false });
   }
 });
+
+// Initialize autocomplete functionality
+initializeAutocomplete();
 
 // Start with edit disabled until verification
 updateVerifyUi();
