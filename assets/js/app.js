@@ -368,16 +368,43 @@ async function loadMatch(matchId){
   if(!loaded || (state.data && state.data.matchId !== id)){
     try{
       showToast("Loading match data...", "info");
-      const res = await fetch(`./data/${encodeURIComponent(id)}.json`, { cache: "no-store" });
+
+      // Determine the correct URL for data files
+      let dataUrl = `./data/${encodeURIComponent(id)}.json`;
+      if(window.location.hostname.includes('github.io')){
+        dataUrl = `${window.location.origin}${window.location.pathname.replace(/\/$/, '')}/data/${encodeURIComponent(id)}.json`;
+      }
+
+      const res = await fetch(dataUrl, { cache: "no-store" });
       if(res.ok){
         const jsonText = await res.text();
         // Check if the response is extremely large (potential memory issue)
         if(jsonText.length > 10 * 1024 * 1024) { // 10MB
           showToast("Large file detected - this may take a moment to load", "info");
         }
-        state.data = JSON.parse(jsonText);
+
+        const publishedData = JSON.parse(jsonText);
+        const publishedSlideCount = publishedData.slides?.length || 0;
+
+        // Check if we have more recent local data
+        const localAutosave = localStorage.getItem(`dota-review:${id}`);
+        let localSlideCount = 0;
+        if(localAutosave){
+          try {
+            const localData = JSON.parse(localAutosave);
+            localSlideCount = localData.slides?.length || 0;
+          } catch {}
+        }
+
+        state.data = publishedData;
         loaded = true;
-        showToast(`Loaded match with ${state.data.slides?.length || 0} slides`, "info");
+
+        // Warn user if local data has more slides than published
+        if(localSlideCount > publishedSlideCount && localSlideCount > 0){
+          showToast(`⚠️ Local data has ${localSlideCount} slides, but published has ${publishedSlideCount}. Consider publishing your changes.`, "warning");
+        } else {
+          showToast(`Loaded match with ${publishedSlideCount} slides`, "info");
+        }
       }
     }catch(err){
       console.error("Error loading match:", err);
@@ -393,6 +420,51 @@ async function loadMatch(matchId){
   state.slideIndex = 0;
   updateAutosaveKey();
   renderAll();
+}
+
+// Helper function to check for local vs published data differences
+function checkLocalVsPublished(matchId){
+  const id = String(matchId || "").trim();
+  if(!id) return { localSlides: 0, publishedSlides: 0, hasDifference: false };
+
+  let localSlides = 0;
+  let publishedSlides = 0;
+
+  // Check local data
+  const localAutosave = localStorage.getItem(`dota-review:${id}`);
+  if(localAutosave){
+    try {
+      const localData = JSON.parse(localAutosave);
+      localSlides = localData.slides?.length || 0;
+    } catch {}
+  }
+
+  // Check published data
+  try {
+    let dataUrl = `./data/${encodeURIComponent(id)}.json`;
+    if(window.location.hostname.includes('github.io')){
+      dataUrl = `${window.location.origin}${window.location.pathname.replace(/\/$/, '')}/data/${encodeURIComponent(id)}.json`;
+    }
+
+    // This is async, but we'll return what we can synchronously
+    fetch(dataUrl, { cache: "no-store" })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if(data && data.slides){
+          publishedSlides = data.slides.length;
+          if(localSlides > publishedSlides && localSlides > 0){
+            showToast(`⚠️ Local: ${localSlides} slides, Published: ${publishedSlides}. Click "Publish to GitHub" to sync.`, "warning");
+          }
+        }
+      })
+      .catch(() => {});
+  } catch {}
+
+  return {
+    localSlides,
+    publishedSlides,
+    hasDifference: localSlides !== publishedSlides && (localSlides > 0 || publishedSlides > 0)
+  };
 }
 
 function saveLocal(){
