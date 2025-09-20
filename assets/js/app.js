@@ -1914,9 +1914,9 @@ function clearDotaReviewLocalStorage() {
     const keys = Object.keys(localStorage);
     let clearedCount = 0;
     keys.forEach(key => {
-      // Clear all dota-review related data except encrypted credentials
+      // Clear all dota-review related data except GitHub credentials and preferences
       if (key.startsWith('dota-review:') &&
-          !key.startsWith('dota-review:gh_enc') && // Keep encrypted credentials
+          !key.startsWith('dota-review:gh') && // Keep ALL GitHub credentials (gh and gh_enc)
           key !== 'dota-review:welcomed') { // Keep welcome dialog preference
         localStorage.removeItem(key);
         clearedCount++;
