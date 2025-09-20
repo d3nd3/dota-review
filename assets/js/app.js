@@ -1101,9 +1101,15 @@ async function renameMatchId(newId){
   // Check if new ID already exists (only check localStorage, not remote)
   if(nid !== oldId){
     try {
-      // First check localStorage
-      const localCheck = localStorage.getItem(`dota-review:local:${nid}`);
-      if(localCheck){
+      // Check both autosave and metadata backup keys
+      const autosaveCheck = localStorage.getItem(`dota-review:${nid}`);
+      const metadataCheck = localStorage.getItem(`dota-review:local:${nid}`);
+
+      if(autosaveCheck || metadataCheck){
+        console.log(`Match ID "${nid}" conflict detected:`, {
+          autosave: !!autosaveCheck,
+          metadata: !!metadataCheck
+        });
         showToast(`Match ID "${nid}" already exists locally. Choose a different ID.`, "error");
         return;
       }
@@ -1902,21 +1908,55 @@ verifyBtn?.addEventListener('click', async () => {
 // Initialize autocomplete functionality
 initializeAutocomplete();
 
-// Clear localStorage when leaving the page to prevent conflicts
-window.addEventListener('beforeunload', () => {
+// Function to clear dota-review localStorage data
+function clearDotaReviewLocalStorage() {
   try {
     const keys = Object.keys(localStorage);
+    let clearedCount = 0;
     keys.forEach(key => {
       // Clear all dota-review related data except encrypted credentials
       if (key.startsWith('dota-review:') &&
           !key.startsWith('dota-review:gh_enc') && // Keep encrypted credentials
           key !== 'dota-review:welcomed') { // Keep welcome dialog preference
         localStorage.removeItem(key);
+        clearedCount++;
       }
     });
-    console.log('Cleared dota-review localStorage data on page unload');
+    console.log(`Cleared ${clearedCount} dota-review localStorage items`);
+    return clearedCount;
   } catch (e) {
-    console.warn('Failed to clear localStorage on unload:', e);
+    console.warn('Failed to clear localStorage:', e);
+    return 0;
+  }
+}
+
+// Clear localStorage when leaving the page to prevent conflicts
+window.addEventListener('beforeunload', () => {
+  clearDotaReviewLocalStorage();
+});
+
+// Also clear on page load to ensure clean state
+document.addEventListener('DOMContentLoaded', () => {
+  // Small delay to ensure other initialization is done
+  setTimeout(() => {
+    const cleared = clearDotaReviewLocalStorage();
+    if (cleared > 0) {
+      console.log('Cleared stale localStorage data on page load');
+    }
+  }, 100);
+});
+
+// Add global function for debugging/manual clearing
+window.clearDotaReviewStorage = clearDotaReviewLocalStorage;
+
+// Add keyboard shortcut to manually clear storage (Ctrl+Shift+C)
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+    e.preventDefault();
+    const cleared = clearDotaReviewLocalStorage();
+    showToast(`Cleared ${cleared} localStorage items`, cleared > 0 ? 'info' : 'warning');
+    // Reload available match IDs for autocomplete
+    initializeAutocomplete();
   }
 });
 
