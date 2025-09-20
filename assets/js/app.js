@@ -1135,6 +1135,33 @@ async function renameMatchId(newId){
   }
   saveLocal();
 
+  // If user has verified GitHub credentials, also rename the file on GitHub and update index.json
+  if(state.verified && oldId !== nid){
+    const owner = ghOwner.value.trim();
+    const repo = ghRepo.value.trim();
+    const branch = ghBranch.value.trim() || "gh-pages";
+    const token = ghToken.value.trim();
+
+    if(owner && repo && token){
+      try {
+        showToast("Renaming file on GitHub...", "info");
+
+        // Rename the JSON file on GitHub
+        const oldPath = `data/${encodeURIComponent(oldId)}.json`;
+        const newPath = `data/${encodeURIComponent(nid)}.json`;
+        await renameFileOnGitHub(owner, repo, branch, token, oldPath, newPath, nid);
+
+        // Update index.json to reflect the new match ID
+        await updateIndexForRenamedMatch(owner, repo, branch, token, oldId, nid);
+
+        showToast(`Match ID changed to "${nid}". File renamed and index updated on GitHub.`, "info");
+      } catch(githubError) {
+        console.error("Failed to rename on GitHub:", githubError);
+        showToast(`Match ID changed locally to "${nid}", but GitHub operations failed. You may need to publish manually.`, "warning");
+      }
+    }
+  }
+
   // Save minimal metadata locally to avoid quota issues
   // This ensures the change persists even if not published to GitHub
   try {
@@ -1153,12 +1180,16 @@ async function renameMatchId(newId){
     // Check if the data would exceed a reasonable size limit (1MB for metadata)
     if(metadataString.length > 1024 * 1024) {
       console.warn("Metadata too large, skipping local backup");
-      showToast(`Match ID changed to "${nid}".`, "info");
+      if(!state.verified || oldId === nid) {
+        showToast(`Match ID changed to "${nid}".`, "info");
+      }
       return;
     }
 
     localStorage.setItem(`dota-review:local:${nid}`, metadataString);
-    showToast(`Match ID changed to "${nid}". Changes saved locally.`, "info");
+    if(!state.verified || oldId === nid) {
+      showToast(`Match ID changed to "${nid}". Changes saved locally.`, "info");
+    }
 
   } catch(err) {
     console.warn("Could not save local metadata:", err);
@@ -1166,7 +1197,9 @@ async function renameMatchId(newId){
     if(err.name === 'QuotaExceededError') {
       console.warn("localStorage quota exceeded for metadata, skipping backup");
     }
-    showToast(`Match ID changed to "${nid}".`, "info");
+    if(!state.verified || oldId === nid) {
+      showToast(`Match ID changed to "${nid}".`, "info");
+    }
   }
 
   renderAll();
@@ -1351,6 +1384,73 @@ async function getFileSha(owner, repo, path, branch, token){
   return j.sha;
 }
 
+// Rename a file on GitHub from old path to new path
+async function renameFileOnGitHub(owner, repo, branch, token, oldPath, newPath, newMatchId) {
+  try {
+    // First, get the content of the old file
+    const getRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${oldPath}?ref=${encodeURIComponent(branch)}`, {
+      headers: { Authorization: `token ${token}` }
+    });
+
+    if (!getRes.ok) {
+      throw new Error(`Could not fetch old file: ${getRes.status}`);
+    }
+
+    const fileData = await getRes.json();
+    const content = fileData.content;
+    const sha = fileData.sha;
+
+    // Update the content to reflect the new matchId
+    const decodedContent = JSON.parse(atob(content));
+    decodedContent.matchId = newMatchId;
+
+    // Create the new file with updated content
+    const newContent = btoa(unescape(encodeURIComponent(JSON.stringify(decodedContent, null, 2))));
+    const createApi = `https://api.github.com/repos/${owner}/${repo}/contents/${newPath}`;
+    const createRes = await fetch(createApi, {
+      method: 'PUT',
+      headers: {
+        Authorization: `token ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        message: `Rename match from ${oldPath} to ${newPath}`,
+        content: newContent,
+        branch
+      })
+    });
+
+    if (!createRes.ok) {
+      throw new Error(`Failed to create new file: ${createRes.status}`);
+    }
+
+    // Delete the old file
+    const deleteApi = `https://api.github.com/repos/${owner}/${repo}/contents/${oldPath}`;
+    const deleteRes = await fetch(deleteApi, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `token ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        message: `Delete old file after renaming to ${newPath}`,
+        sha,
+        branch
+      })
+    });
+
+    if (!deleteRes.ok) {
+      console.warn(`Failed to delete old file ${oldPath}: ${deleteRes.status}`);
+    }
+
+    console.log(`Successfully renamed ${oldPath} to ${newPath}`);
+    return true;
+  } catch (error) {
+    console.error('Error renaming file on GitHub:', error);
+    throw error;
+  }
+}
+
 // Update index.json after publishing a new match
 async function updateIndexAfterPublish(owner, repo, branch, token, matchId) {
   try {
@@ -1427,6 +1527,72 @@ async function updateIndexAfterPublish(owner, repo, branch, token, matchId) {
     console.log(`Successfully updated index.json with match ${matchId}`);
   } catch (error) {
     console.error('Error updating index.json:', error);
+    throw error;
+  }
+}
+
+// Update index.json to replace old match ID with new match ID
+async function updateIndexForRenamedMatch(owner, repo, branch, token, oldMatchId, newMatchId) {
+  try {
+    const idxPath = 'data/index.json';
+
+    // Fetch current index.json
+    let idxSha = await getFileSha(owner, repo, idxPath, branch, token);
+    if (!idxSha) {
+      console.log('index.json not found, nothing to update for renamed match');
+      return;
+    }
+
+    const idxRes = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${idxPath}`);
+    if (!idxRes.ok) {
+      throw new Error('Could not fetch index.json');
+    }
+
+    const currentIndex = await idxRes.json();
+
+    // Find the entry for the old match ID
+    const oldEntry = (currentIndex.published || []).find(p => p.matchId === oldMatchId);
+    if (!oldEntry) {
+      console.log(`No entry found for ${oldMatchId} in index.json`);
+      return;
+    }
+
+    // Update the entry with the new match ID
+    const updatedEntry = { ...oldEntry, matchId: newMatchId };
+
+    // Replace the old entry with the updated one
+    currentIndex.published = (currentIndex.published || []).map(p =>
+      p.matchId === oldMatchId ? updatedEntry : p
+    );
+
+    // Sort by timestamp descending
+    currentIndex.published.sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
+
+    // Update index.json on GitHub
+    const content = btoa(unescape(encodeURIComponent(JSON.stringify(currentIndex, null, 2))));
+    const api = `https://api.github.com/repos/${owner}/${repo}/contents/${idxPath}`;
+    const putRes = await fetch(api, {
+      method: 'PUT',
+      headers: {
+        Authorization: `token ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        message: `Update index after renaming match ${oldMatchId} to ${newMatchId}`,
+        content,
+        sha: idxSha,
+        branch
+      })
+    });
+
+    if (!putRes.ok) {
+      const errorText = await putRes.text();
+      throw new Error(`Failed to update index.json: ${putRes.status} ${errorText}`);
+    }
+
+    console.log(`Successfully updated index.json for renamed match ${oldMatchId} -> ${newMatchId}`);
+  } catch (error) {
+    console.error('Error updating index.json for renamed match:', error);
     throw error;
   }
 }
