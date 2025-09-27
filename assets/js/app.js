@@ -989,7 +989,10 @@ function exportJSON(){
 }
 
 async function handlePaste(e){
-  if(!state.edit) return;
+  if(!state.edit){
+    showToast("Enable Edit mode to paste images", "warning");
+    return;
+  }
   const items = e.clipboardData?.items || [];
   for(const it of items){
     if(it.kind === "file" && it.type.startsWith("image/")){
@@ -1025,7 +1028,10 @@ function setupDragDrop(){
   ["dragenter","dragover"].forEach(ev => wrap.addEventListener(ev, e => { if(state.edit){ e.preventDefault(); wrap.classList.add("drag"); } }));
   ["dragleave","drop"].forEach(ev => wrap.addEventListener(ev, e => { wrap.classList.remove("drag"); }));
   wrap.addEventListener("drop", async (e) => {
-    if(!state.edit) return;
+    if(!state.edit){
+      showToast("Enable Edit mode to drop images", "warning");
+      return;
+    }
     e.preventDefault();
     const files = Array.from(e.dataTransfer?.files || []).filter(f => f.type.startsWith("image/"));
     for(const f of files){ const url = await fileToDataUrl(f); addSlideFromImage(url); }
