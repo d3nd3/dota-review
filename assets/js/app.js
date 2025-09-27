@@ -688,15 +688,24 @@ function renderSlide(){
   // Add error handling for large images
   const loadImage = () => {
     try {
-      imageEl.src = cur.image || "";
+      // Set error handler first to catch race conditions
       imageEl.onerror = () => {
         console.warn(`Failed to load slide ${state.slideIndex + 1} - possibly due to memory limits`);
-        imageEl.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300' viewBox='0 0 400 300'%3E%3Crect width='400' height='300' fill='%230e1216'/%3E%3Ctext x='200' y='140' text-anchor='middle' fill='%23cf2e2e' font-size='16'%3EImage too large to display%3C/text%3E%3Ctext x='200' y='165' text-anchor='middle' fill='%239aa7b2' font-size='12'%3EUse navigation arrows to view other slides%3C/text%3E%3C/svg%3E";
+        console.log("Image src that failed:", cur.image?.substring(0, 100) + "..."); // Log first 100 chars for debugging
+        imageEl.src = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgdmlld0JveD0iMCAwIDQwMCAzMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjQwMCIgaGVpZ2h0PSIzMDAiIGZpbGw9IiMwZTEyMTYiLz48dGV4dCB4PSIyMDAiIHk9IjE0MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iI2NmMmUyZSIgZm9udC1zaXplPSIxNiI+SW1hZ2UgdG9vIGxhcmdlIHRvIGRpc3BsYXk8L3RleHQ+PHRleHQgeD0iMjAwIiB5PSIxNjUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM5YWE3YjIiIGZvbnQtc2l6ZT0iMTIiPlVzZSBuYXZpZ2F0aW9uIGFycm93cyB0byB2aWV3IG90aGVyIHNsaWRlczwvdGV4dD48L3N2Zz4=";
         showToast("Slide image too large to display. Try navigating to other slides.", "error");
       };
+
+      imageEl.onload = () => {
+        // Image loaded successfully, clear any error state
+        console.log(`Slide ${state.slideIndex + 1} image loaded successfully`);
+      };
+
+      imageEl.src = cur.image || "";
+
     } catch (e) {
       console.error("Error loading slide image:", e);
-      imageEl.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300' viewBox='0 0 400 300'%3E%3Crect width='400' height='300' fill='%230e1216'/%3E%3Ctext x='200' y='140' text-anchor='middle' fill='%23cf2e2e' font-size='16'%3EError loading image%3C/text%3E%3Ctext x='200' y='165' text-anchor='middle' fill='%239aa7b2' font-size='12'%3EPlease try refreshing the page%3C/text%3E%3C/svg%3E";
+      imageEl.src = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgdmlld0JveD0iMCAwIDQwMCAzMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjQwMCIgaGVpZ2h0PSIzMDAiIGZpbGw9IiMwZTEyMTYiLz48dGV4dCB4PSIyMDAiIHk9IjE0MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iI2NmMmUyZSIgZm9udC1zaXplPSIxNiI+RXJyb3IgbG9hZGluZyBpbWFnZTwvdGV4dD48dGV4dCB4PSIyMDAiIHk9IjE2NSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzk2YTdiMiIgZm9udC1zaXplPSIxMiI+UGxlYXNlIHRyeSByZWZyZXNoaW5nIHRoZSBwYWdlPC90ZXh0Pjwvc3ZnPg==";
     }
   };
 
@@ -985,7 +994,17 @@ async function handlePaste(e){
   for(const it of items){
     if(it.kind === "file" && it.type.startsWith("image/")){
       const file = it.getAsFile();
-      if(file) { await fileToDataUrl(file).then(addSlideFromImage); }
+      if(file) {
+        console.log("Pasting image file:", file.name, file.size, file.type);
+        try {
+          const dataUrl = await fileToDataUrl(file);
+          console.log("Image converted to data URL, length:", dataUrl.length);
+          addSlideFromImage(dataUrl);
+        } catch(err) {
+          console.error("Error converting pasted image to data URL:", err);
+          showToast("Failed to process pasted image", "error");
+        }
+      }
       e.preventDefault();
       return;
     }
@@ -1016,8 +1035,20 @@ function setupDragDrop(){
 function fileToDataUrl(file){
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = reject;
+    reader.onload = () => {
+      const result = String(reader.result);
+      console.log("FileReader result type:", typeof result, "length:", result.length);
+      if (!result.startsWith('data:')) {
+        console.error("Invalid data URL format:", result.substring(0, 100));
+        reject(new Error("Invalid data URL format"));
+        return;
+      }
+      resolve(result);
+    };
+    reader.onerror = (err) => {
+      console.error("FileReader error:", err);
+      reject(err);
+    };
     reader.readAsDataURL(file);
   });
 }
