@@ -159,6 +159,21 @@
         </form>
     </dialog>
 
+    <dialog id="timeInputDialog" class="dialog time-input">
+        <form method="dialog">
+            <h3>Add Time Stamp</h3>
+            <p>Enter the time when this moment occurred in the match:</p>
+            <div class="time-input-container">
+                <input id="timeInput" type="text" placeholder="MM:SS" pattern="^[0-9]{1,2}:[0-9]{2}$" maxlength="5" autocomplete="off">
+                <div class="time-input-hint">Format: MM:SS (e.g., 12:34)</div>
+            </div>
+            <div class="time-input-actions">
+                <button id="timeInputSkipBtn" class="btn subtle" value="skip">Skip</button>
+                <button id="timeInputConfirmBtn" class="btn primary" value="confirm">Add Time</button>
+            </div>
+        </form>
+    </dialog>
+
     <div id="toastContainer" class="toast-container"></div>
 
     <script src="./assets/js/app.js" type="module"></script>

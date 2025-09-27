@@ -1,5 +1,5 @@
 // Dota Review App - static, GitHub Pages friendly
-// Data shape: { matchId: string, rating: number, hero?: string, slides: [{ image: string(base64 or url), notes: string[] }] }
+// Data shape: { matchId: string, rating: number, hero?: string, slides: [{ image: string(base64 or url), notes: string[], time?: string(MM:SS) }] }
 
 // Dota 2 Heroes data
 const DOTA_HEROES = [
@@ -143,6 +143,9 @@ const state = {
   currentSuggestions: [],
   selectedSuggestionIndex: -1,
   suggestionsVisible: false,
+  // Time input state
+  pendingSlideImage: null, // Image waiting for time input
+  pendingSlideIndex: null, // Index where the slide should be inserted
 };
 
 // Elements
@@ -191,6 +194,12 @@ const ghToken = $("#ghToken");
 const publishProgress = $("#publishProgress");
 const progressFill = $("#progressFill");
 const progressText = $("#progressText");
+
+// Time input dialog elements
+const timeInputDialog = $("#timeInputDialog");
+const timeInput = $("#timeInput");
+const timeInputSkipBtn = $("#timeInputSkipBtn");
+const timeInputConfirmBtn = $("#timeInputConfirmBtn");
 
 // Load saved GitHub credentials (owner/repo/branch/token) if present
 function loadSavedCredentials(){
@@ -355,7 +364,8 @@ async function loadMatch(matchId){
             hero: compressedData.hero,
             slides: compressedData.slides?.map(slide => ({
               image: "", // Will be empty, user can re-add images
-              notes: slide.notes || []
+              notes: slide.notes || [],
+              time: slide.time || null
             })) || []
           };
           loaded = true;
@@ -372,7 +382,7 @@ async function loadMatch(matchId){
                 matchId: minimalData.matchId,
                 rating: minimalData.rating,
                 hero: minimalData.hero,
-                slides: [] // No slides in minimal format
+                slides: [] // No slides in minimal format, but time info preserved in metadata
               };
               loaded = true;
               console.log("Loaded minimal data from localStorage");
@@ -529,6 +539,7 @@ function saveLocal(){
         hero: state.data.hero || "",
         rating: state.data.rating || 0,
         slideCount: state.data.slides?.length || 0,
+        hasTimes: state.data.slides?.some(slide => slide.time) || false,
         lastModified: new Date().toISOString()
         // Removed thumbnail to prevent quota issues
       };
@@ -569,6 +580,7 @@ function saveLocal(){
         hero: state.data.hero,
         slides: state.data.slides?.map(slide => ({
           notes: slide.notes || [],
+          time: slide.time || null,
           // Omit image data to save space
           hasImage: !!(slide.image)
         })) || []
@@ -587,7 +599,8 @@ function saveLocal(){
             matchId: state.data.matchId,
             rating: state.data.rating,
             hero: state.data.hero,
-            slideCount: state.data.slides?.length || 0
+            slideCount: state.data.slides?.length || 0,
+            hasTimes: state.data.slides?.some(slide => slide.time) || false
           };
           const ultraMinimalString = JSON.stringify(ultraMinimalData);
           try {
@@ -708,6 +721,22 @@ function renderSlide(){
       imageEl.src = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgdmlld0JveD0iMCAwIDQwMCAzMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjQwMCIgaGVpZ2h0PSIzMDAiIGZpbGw9IiMwZTEyMTYiLz48dGV4dCB4PSIyMDAiIHk9IjE0MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iI2NmMmUyZSIgZm9udC1zaXplPSIxNiI+RXJyb3IgbG9hZGluZyBpbWFnZTwvdGV4dD48dGV4dCB4PSIyMDAiIHk9IjE2NSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzk2YTdiMiIgZm9udC1zaXplPSIxMiI+UGxlYXNlIHRyeSByZWZyZXNoaW5nIHRoZSBwYWdlPC90ZXh0Pjwvc3ZnPg==";
     }
   };
+
+  // Display time if available
+  const timeContainer = document.querySelector('.slide-time');
+  if (cur.time) {
+    if (!timeContainer) {
+      const timeEl = document.createElement('div');
+      timeEl.className = 'slide-time';
+      timeEl.textContent = cur.time;
+      imageWrap.appendChild(timeEl);
+    } else {
+      timeContainer.textContent = cur.time;
+      timeContainer.style.display = 'block';
+    }
+  } else if (timeContainer) {
+    timeContainer.style.display = 'none';
+  }
 
   loadImage();
   pasteHint.style.display = (state.edit && !cur.image) ? "flex" : "none";
@@ -833,6 +862,15 @@ function renderFilmstrip(){
     }
 
     const idx = document.createElement("div"); idx.className = "index"; idx.textContent = String(i+1);
+
+    // Add time overlay if slide has time
+    if (s.time) {
+      const timeOverlay = document.createElement("div");
+      timeOverlay.className = "time-overlay";
+      timeOverlay.textContent = s.time;
+      th.appendChild(timeOverlay);
+    }
+
     th.appendChild(img); th.appendChild(idx);
     th.addEventListener("click", () => {
       state.slideIndex = i;
@@ -856,19 +894,88 @@ function updateTitle(){
   document.title = state.data.matchId ? `Dota Review – ${state.data.matchId}` : "Dota Review";
 }
 
+// Time input dialog functions
+function showTimeInputDialog(imageSrc) {
+  state.pendingSlideImage = imageSrc;
+  timeInput.value = "";
+  timeInputDialog.showModal();
+  timeInput.focus();
+}
+
+function hideTimeInputDialog() {
+  timeInputDialog.close();
+  state.pendingSlideImage = null;
+  state.pendingSlideIndex = null;
+}
+
+function confirmTimeInput() {
+  const timeValue = timeInput.value.trim();
+  if (!timeValue) {
+    showToast("Please enter a time or click Skip", "warning");
+    return;
+  }
+
+  // Validate MM:SS format
+  const timeRegex = /^([0-9]{1,2}):([0-9]{2})$/;
+  const match = timeValue.match(timeRegex);
+  if (!match) {
+    showToast("Please enter time in MM:SS format (e.g., 12:34)", "warning");
+    timeInput.focus();
+    return;
+  }
+
+  const minutes = parseInt(match[1]);
+  const seconds = parseInt(match[2]);
+
+  if (minutes > 99 || seconds > 59) {
+    showToast("Invalid time - minutes must be 0-99, seconds must be 0-59", "warning");
+    timeInput.focus();
+    return;
+  }
+
+  // Create the slide with time
+  const slide = {
+    image: state.pendingSlideImage,
+    notes: [],
+    time: timeValue
+  };
+
+  // Determine where to insert the slide
+  if (state.pendingSlideIndex !== null) {
+    state.data.slides.splice(state.pendingSlideIndex, 0, slide);
+    state.slideIndex = state.pendingSlideIndex;
+  } else {
+    state.data.slides.push(slide);
+    state.slideIndex = state.data.slides.length - 1;
+  }
+
+  hideTimeInputDialog();
+  renderAll();
+  saveLocal();
+
+  showToast(`Added slide at ${timeValue}`, "success");
+}
+
 function addSlideFromImage(src){
   // If there's a current slide without an image, paste into it instead of creating a new slide
   if(!state.data.slides) state.data.slides = [];
   const cur = currentSlide();
   if(cur && !cur.image){
+    // For existing empty slides, just add the image and ask for time
     cur.image = src;
-    // Keep current index
-    renderAll();
+    showTimeInputDialogForSlide(state.slideIndex);
     return;
   }
-  state.data.slides.push({ image: src, notes: [] });
-  state.slideIndex = state.data.slides.length - 1;
-  renderAll();
+
+  // For new slides, show time dialog before adding
+  showTimeInputDialog(src);
+}
+
+function showTimeInputDialogForSlide(slideIndex) {
+  state.pendingSlideIndex = slideIndex;
+  timeInput.value = "";
+  timeInputDialog.showModal();
+  timeInput.focus();
 }
 
 function addEmptySlide(){
@@ -1660,7 +1767,9 @@ async function populatePublishedList(){
 
       const meta = document.createElement('div'); meta.className = 'pub-meta';
       const title = document.createElement('div'); title.className = 'pub-title'; title.textContent = p.matchId;
-      const sub = document.createElement('div'); sub.className = 'pub-sub'; sub.textContent = `${p.hero || ''} • ${p.ts ? new Date(p.ts).toLocaleString() : ''}`;
+      const sub = document.createElement('div'); sub.className = 'pub-sub';
+      const timeStr = p.time ? ` • ${p.time}` : '';
+      sub.textContent = `${p.hero || ''}${timeStr} • ${p.ts ? new Date(p.ts).toLocaleString() : ''}`;
       meta.appendChild(title); meta.appendChild(sub);
       item.appendChild(img);
       if(heroPortrait) item.appendChild(heroPortrait);
@@ -1745,6 +1854,36 @@ clearNotesBtn.addEventListener("click", () => { const s = currentSlide(); if(!s)
 navPrev.addEventListener("click", () => nav(-1));
 navNext.addEventListener("click", () => nav(1));
 emptyAddBtn.addEventListener("click", addEmptySlide);
+
+// Time input dialog event listeners
+timeInputConfirmBtn.addEventListener("click", (e) => {
+  e.preventDefault();
+  confirmTimeInput();
+});
+
+timeInputSkipBtn.addEventListener("click", (e) => {
+  e.preventDefault();
+  // Create slide without time
+  const slide = {
+    image: state.pendingSlideImage,
+    notes: [],
+    time: null
+  };
+
+  if (state.pendingSlideIndex !== null) {
+    state.data.slides.splice(state.pendingSlideIndex, 0, slide);
+    state.slideIndex = state.pendingSlideIndex;
+  } else {
+    state.data.slides.push(slide);
+    state.slideIndex = state.data.slides.length - 1;
+  }
+
+  hideTimeInputDialog();
+  renderAll();
+  saveLocal();
+  showToast("Added slide without time", "info");
+});
+
 setupDragDrop();
 // wire note sentiment control handler
 wireNoteSentimentControls();
@@ -1944,6 +2083,7 @@ async function updateIndexAfterPublish(owner, repo, branch, token, matchId) {
       matchId: matchData.matchId || matchId,
       hero: matchData.hero || '',
       image: (matchData.slides && matchData.slides[0] && matchData.slides[0].image) || '',
+      time: (matchData.slides && matchData.slides[0] && matchData.slides[0].time) || '',
       ts: matchData.ts || new Date().toISOString()
     };
 

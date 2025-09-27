@@ -132,4 +132,108 @@
   .notes-list{max-height:34vh}
 }
 
+/* Time Input Dialog */
+.dialog.time-input {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  min-width: 400px;
+  box-shadow: var(--shadow);
+}
 
+.dialog.time-input h3 {
+  margin: 0 0 12px 0;
+  color: var(--text);
+  font-family: Cinzel, serif;
+  font-weight: 700;
+}
+
+.dialog.time-input p {
+  margin: 0 0 16px 0;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.time-input-container {
+  margin-bottom: 20px;
+}
+
+#timeInput {
+  width: 100%;
+  height: 44px;
+  padding: 0 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+  outline: none;
+  text-align: center;
+  letter-spacing: 1px;
+}
+
+#timeInput:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px rgba(207, 46, 46, 0.2);
+}
+
+.time-input-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.time-input-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+#timeInputSkipBtn {
+  background: transparent;
+  color: var(--muted);
+}
+
+#timeInputSkipBtn:hover {
+  background: rgba(154, 167, 178, 0.1);
+  border-color: var(--border);
+}
+
+#timeInputConfirmBtn {
+  min-width: 120px;
+}
+
+/* Time display on slides */
+.slide-time {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  font-weight: bold;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Filmstrip time display */
+.thumb .time-overlay {
+  position: absolute;
+  bottom: 2px;
+  left: 2px;
+  right: 2px;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: bold;
+  text-align: center;
+  backdrop-filter: blur(2px);
+}
